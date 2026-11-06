@@ -1,0 +1,44 @@
+country: Canada
+authority: "Immigration, Refugees and Citizenship Canada (IRCC)"
+spelling: Canadian English (organization, colour, centre, programme only for official names)
+word_count: {min: 120, max: 300}   # sirf cover letter wale hisse ke liye
+addressee: ["The Visa Officer", "Immigration, Refugees and Citizenship Canada (IRCC)"]
+# Output 3 hisson ka package hai (format_example_visit.txt dekhein):
+#   1) Cover Letter  2) Purpose of Visit  3) Travel Itinerary (study mein itinerary nahi)
+format:
+  - "Page 1: To / Visa Officer, Subject line, Dear Visa Officer, 2-3 chhote paragraphs, closing"
+  - "Page 2: heading PURPOSE OF VISIT, 2-3 paragraphs"
+  - "Page 3: heading TRAVEL ITINERARY, table (Date | Location | Planned Activities)"
+  - "Zaroori naam, jagah aur dates **double asterisks** mein (bold hongi)"
+must_not:
+  - Sirf diye gaye facts use karo. Koi bank balance, date, company, relative ya amount khud mat banao.
+  - "Agar koi zaroori info missing ho to usay \"missing\" list mein daalo aur letter mein [MISSING: detail] likho."
+  - Photo, religion, marital status ka zikr tabhi karo jab zaroori ho (e.g. family ties).
+  - Jhoote wade ya exaggeration nahi (e.g. "100% guarantee to return").
+tone: Professional, honest, concise, first person.
+
+visa_types:
+  visit:
+    label: "Temporary Resident Visa (Visitor)"
+    must_cover:
+      - Travel ka maqsad (tourism / family visit)
+      - Dates aur duration, kahan rukenge
+      - Funds ka zariya aur bank statement ka khulasa
+      - Pakistan mein ties (job, family, property) aur wapsi ka irada
+      - Agar invitation hai to host ka naam, rishta, status Canada mein
+  business:
+    label: "Temporary Resident Visa (Business Visitor)"
+    must_cover:
+      - Business ka maqsad (meeting, conference, trade fair), Canadian company ka naam
+      - Applicant ka role aur employer/company ka naam
+      - Dates, duration, kharcha kaun uthaye ga
+      - Ye wazeh karna ke Canadian labour market mein kaam nahi kar raha
+      - Pakistan mein ties aur wapsi ka irada
+  study:
+    label: "Study Permit"
+    must_cover:
+      - Institute ka naam, program, start date, Letter of Acceptance
+      - Is program ko chunne ki wajah aur career plan
+      - Tuition aur living costs ka funding (bank statement, sponsor)
+      - Pakistan wapsi ka plan aur ties
+      - Study ke baad ka plan
