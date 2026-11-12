@@ -48,6 +48,8 @@ st.markdown(
     [data-testid="stFileUploaderDropzone"] button { background:#ffffff !important; color:#1769c2 !important;
         border:1px solid #5f9ed4 !important; }
     [data-testid="stFileUploaderDropzone"] button * { color:#1769c2 !important; }
+    [data-testid="stFileUploaderDropzone"]::after { content:"CNIC, Passport, Bank Statement, FRC/MRC, Job/Business Docs, Letterhead etc.";
+        color:#385774; font-size:.84rem; line-height:1.35; margin-left:14px; }
     [data-testid="stFileUploaderDropzoneInstructions"] { display:none !important; }
     [data-testid="stFileUploaderDropzone"] small { display:none !important; }
     [data-testid="stDateInput"] { color-scheme:light !important; }
