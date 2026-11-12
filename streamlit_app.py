@@ -43,13 +43,13 @@ st.markdown(
     div[data-testid="stFileUploader"] { background:linear-gradient(180deg,#ffffff,#f5faff); border:1px solid #bcd7eb; border-radius:14px;
         padding:8px 12px 4px; box-shadow:0 10px 24px rgba(40,88,132,.11); }
     [data-testid="stFileUploaderDropzone"] { border:1.5px dashed #8caed2 !important; border-radius:14px;
-        background:#f2f8fe !important; color:#18324f !important; }
+        background:#f2f8fe !important; color:#18324f !important; align-items:center !important; }
     [data-testid="stFileUploaderDropzone"] * { color:#18324f !important; }
     [data-testid="stFileUploaderDropzone"] button { background:#ffffff !important; color:#1769c2 !important;
         border:1px solid #5f9ed4 !important; }
     [data-testid="stFileUploaderDropzone"] button * { color:#1769c2 !important; }
     [data-testid="stFileUploaderDropzone"]::after { content:"CNIC, Passport, Bank Statement, FRC/MRC, Job/Business Docs, Letterhead etc.";
-        color:#385774; font-size:.84rem; line-height:1.35; margin-left:14px; }
+        color:#385774; font-size:.84rem; line-height:1.35; margin-left:18px; align-self:center; display:flex; align-items:center; }
     [data-testid="stFileUploaderDropzoneInstructions"] { display:none !important; }
     [data-testid="stFileUploaderDropzone"] small { display:none !important; }
     [data-testid="stDateInput"] { color-scheme:light !important; }
@@ -97,7 +97,13 @@ st.markdown(
     [data-testid="stAlert"] { border-width:1px !important; }
     hr { border-color:#2b3a50 !important; }
     div[data-testid="stTextArea"] textarea { font-family:Georgia,'Times New Roman',serif; line-height:1.55; }
-    @media(max-width:760px) { .block-container { padding:1rem; } }
+    @media(max-width:760px) {
+        .block-container { padding:1rem; }
+    }
+    @media(max-width:520px) {
+        [data-testid="stFileUploaderDropzone"] { flex-wrap:wrap; gap:10px; }
+        [data-testid="stFileUploaderDropzone"]::after { width:100%; margin:0; }
+    }
     </style>
     """,
     unsafe_allow_html=True,
