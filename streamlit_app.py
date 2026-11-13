@@ -98,6 +98,10 @@ st.markdown(
     [data-testid="stDateInput"] > div,
     [data-testid="stDateInput"] > div > div,
     [data-testid="stDateInput"] > div > div > div { background-color:#e8f3fd !important; color:#18324f !important; }
+    [data-testid="stDateInput"] [role="group"] *,
+    [data-testid="stDateInput"] [data-placeholder],
+    [data-testid="stDateInput"] [aria-placeholder] { color:#365f82 !important; -webkit-text-fill-color:#365f82 !important;
+        opacity:1 !important; }
     [data-testid="stDateInput"] input { color:#274f72 !important; -webkit-text-fill-color:#274f72 !important;
         background:#e8f3fd !important; text-transform:uppercase; opacity:1 !important; }
     [data-testid="stDateInput"] input::placeholder { color:#55738f !important; -webkit-text-fill-color:#55738f !important;
