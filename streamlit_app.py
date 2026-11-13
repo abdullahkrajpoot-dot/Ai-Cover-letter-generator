@@ -60,13 +60,16 @@ st.markdown(
         radial-gradient(circle at 8% 12%,rgba(65,166,223,.18),transparent 28%),
         radial-gradient(circle at 92% 8%,rgba(80,102,210,.12),transparent 24%),
         linear-gradient(145deg,#edf6ff 0%,#fbfdff 48%,#eef7fb 100%); color:#18324f; }
-    header[data-testid="stHeader"] { background:rgba(248,251,255,.96) !important; color:#18324f !important; }
-    .block-container { max-width:900px; padding-top:1.4rem; padding-bottom:3rem; }
+    header[data-testid="stHeader"] { height:0 !important; min-height:0 !important; background:transparent !important; }
+    [data-testid="stToolbar"], [data-testid="stHeaderActionElements"], [data-testid="stStatusWidget"],
+    #MainMenu { display:none !important; visibility:hidden !important; }
+    .block-container { width:92vw; max-width:1500px; padding-top:1.4rem; padding-bottom:3rem; }
     h1, h2, h3, p, label, .stMarkdown, [data-testid="stWidgetLabel"] { color:#18324f !important; }
     input, textarea, [data-baseweb="select"] > div { color:#18324f !important; background:#ffffff !important; }
     input::placeholder, textarea::placeholder { color:#8393a7 !important; }
-    .simple-head { position:relative; overflow:hidden; background:linear-gradient(120deg,#135f9f,#167fb3 68%,#26a6ad); padding:22px 26px;
-        margin-bottom:18px; border:1px solid #3ca4c5; border-radius:18px; box-shadow:0 15px 34px rgba(25,94,143,.24); }
+    .simple-head { position:relative; overflow:hidden; display:flex; align-items:center; min-height:150px;
+        background:linear-gradient(120deg,#135f9f,#167fb3 68%,#26a6ad); padding:30px 34px;
+        margin-bottom:22px; border:1px solid #3ca4c5; border-radius:18px; box-shadow:0 15px 34px rgba(25,94,143,.24); }
     .simple-head::after { content:""; position:absolute; width:180px; height:180px; right:-45px; top:-95px;
         border-radius:50%; background:rgba(255,255,255,.12); }
     .simple-head h1 { position:relative; z-index:1; margin:0; color:#ffffff !important; font-size:1.8rem; }
@@ -176,8 +179,8 @@ documents = st.file_uploader(
 )
 
 c1, c2 = st.columns(2)
-destination_country = c1.selectbox("Destination country", ["Canada", "United Kingdom", "Australia", "New Zealand"])
-destination_city = c2.text_input("City / cities", placeholder="e.g. Toronto, London, Sydney or Auckland")
+destination_city = c1.text_input("City / cities", placeholder="e.g. Toronto, London, Sydney or Auckland")
+destination_country = c2.selectbox("Destination country", ["Canada", "United Kingdom", "Australia", "New Zealand"])
 visa_type = "visit"
 travel_dates = st.date_input(
     "Travel dates",
