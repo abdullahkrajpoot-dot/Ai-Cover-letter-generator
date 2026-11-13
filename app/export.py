@@ -1,4 +1,6 @@
 """Polished direct-PDF export with automatic company-letterhead support."""
+import hashlib
+import json
 import re
 from copy import deepcopy
 from io import BytesIO
@@ -19,7 +21,22 @@ ACCENT = (0.20, 0.25, 0.32)
 
 
 def _plain(value) -> str:
-    return re.sub(r"\*\*", "", str(value or "")).strip()
+    text = re.sub(r"\*\*", "", str(value or "")).strip()
+    return re.sub(r"(?i)^suggested tourism visit:\s*", "", text)
+
+
+def _document_style(pkg: dict) -> dict:
+    """Choose a stable professional style variant for each generated package."""
+    variants = (
+        {"font": "Cambria", "heading": "1F4E79", "table": "D9EAF7", "align": WD_ALIGN_PARAGRAPH.LEFT, "line": 1.08},
+        {"font": "Garamond", "heading": "6B4F3A", "table": "EFE4D5", "align": WD_ALIGN_PARAGRAPH.CENTER, "line": 1.12},
+        {"font": "Aptos", "heading": "176B70", "table": "DDEEEE", "align": WD_ALIGN_PARAGRAPH.LEFT, "line": 1.10},
+        {"font": "Georgia", "heading": "514A7E", "table": "E7E2F3", "align": WD_ALIGN_PARAGRAPH.CENTER, "line": 1.08},
+    )
+    payload = str(pkg.get("document_style_seed") or json.dumps(
+        pkg, sort_keys=True, ensure_ascii=True, default=str
+    )).encode("utf-8")
+    return variants[hashlib.sha256(payload).digest()[0] % len(variants)]
 
 
 def _wrapped_lines(text: str, width: float, font: str, size: float) -> list[str]:
@@ -187,35 +204,36 @@ def package_pdf(pkg: dict, letterhead: bytes | None = None, letterhead_filename:
 
 
 def _word_runs(paragraph, value) -> None:
-    for index, chunk in enumerate(str(value or "").split("**")):
+    clean_value = re.sub(r"(?i)^suggested tourism visit:\s*", "", str(value or "")).strip()
+    for index, chunk in enumerate(clean_value.split("**")):
         if chunk:
             run = paragraph.add_run(chunk)
             run.bold = index % 2 == 1
 
 
-def _word_heading(doc: Document, title: str, page_break: bool = False) -> None:
+def _word_heading(doc: Document, title: str, style: dict, page_break: bool = False) -> None:
     paragraph = doc.add_paragraph()
     paragraph.paragraph_format.page_break_before = page_break
-    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    paragraph.alignment = style["align"]
     paragraph.paragraph_format.space_before = Pt(4)
     paragraph.paragraph_format.space_after = Pt(10)
     run = paragraph.add_run(_plain(title).upper())
     run.bold = True
     run.underline = True
-    run.font.name = "Times New Roman"
+    run.font.name = style["font"]
     run.font.size = Pt(15)
-    run.font.color.rgb = RGBColor(0, 0, 0)
+    run.font.color.rgb = RGBColor.from_string(style["heading"])
     paragraph.paragraph_format.keep_with_next = True
 
 
-def _word_body(doc: Document, paragraphs: list) -> None:
+def _word_body(doc: Document, paragraphs: list, line_spacing: float = 1.08) -> None:
     for value in paragraphs:
         if not _plain(value):
             continue
         paragraph = doc.add_paragraph()
         paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         paragraph.paragraph_format.space_after = Pt(5)
-        paragraph.paragraph_format.line_spacing = 1.08
+        paragraph.paragraph_format.line_spacing = line_spacing
         _word_runs(paragraph, value)
 
 
@@ -288,6 +306,7 @@ def _place_picture_behind_text(inline_shape, section) -> None:
 def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename: str = "") -> bytes:
     """Create an editable Word version using the same professional section hierarchy."""
     rules = load_rules()
+    style = _document_style(pkg)
     doc = Document()
     section = doc.sections[0]
     section.page_width = Inches(8.27)
@@ -299,7 +318,7 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
     section.bottom_margin = Inches(1.25) if letterhead else Inches(0.75)
 
     normal = doc.styles["Normal"]
-    normal.font.name = "Times New Roman"
+    normal.font.name = style["font"]
     normal.font.size = Pt(10.5)
     normal.font.color.rgb = RGBColor(0, 0, 0)
     normal.paragraph_format.space_after = Pt(8)
@@ -316,17 +335,6 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
             BytesIO(stationery), width=section.page_width, height=section.page_height
         )
         _place_picture_behind_text(shape, section)
-    else:
-        header = section.header
-        header.distance = Inches(0.25)
-        paragraph = header.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = paragraph.add_run("VISA COVER LETTER")
-        run.bold = True
-        run.font.name = "Times New Roman"
-        run.font.size = Pt(11)
-        run.font.color.rgb = RGBColor(55, 77, 98)
-
     doc.add_paragraph("To")
     for line in (pkg.get("addressee") or rules["addressee"]):
         paragraph = doc.add_paragraph(line)
@@ -335,14 +343,14 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
     subject.add_run("Subject: ").bold = True
     _word_runs(subject, pkg.get("subject", ""))
     doc.add_paragraph("Dear Visa Officer,")
-    _word_body(doc, pkg.get("cover_letter", []))
+    _word_body(doc, pkg.get("cover_letter", []), style["line"])
 
     if pkg.get("purpose_of_visit"):
-        _word_heading(doc, "Purpose of visit", page_break=False)
-        _word_body(doc, pkg["purpose_of_visit"])
+        _word_heading(doc, "Purpose of visit", style, page_break=False)
+        _word_body(doc, pkg["purpose_of_visit"], style["line"])
 
     if pkg.get("itinerary"):
-        _word_heading(doc, "Travel itinerary", page_break=False)
+        _word_heading(doc, "Travel itinerary", style, page_break=False)
         table = doc.add_table(rows=1, cols=3)
         table.autofit = False
         table.style = "Table Grid"
@@ -350,7 +358,7 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
         for cell, label, width in zip(table.rows[0].cells, ("Date", "Location", "Planned activities"), widths):
             cell.width = width
             cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-            _set_cell_shading(cell, "D9E2F3")
+            _set_cell_shading(cell, style["table"])
             paragraph = cell.paragraphs[0]
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             paragraph.add_run(label).bold = True
@@ -366,15 +374,15 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
                 _word_runs(paragraph, value)
 
     for index, supporting in enumerate(pkg.get("sections", [])):
-        _word_heading(doc, supporting.get("heading", "Supporting information"), page_break=False)
-        _word_body(doc, supporting.get("paragraphs", []))
+        _word_heading(doc, supporting.get("heading", "Supporting information"), style, page_break=False)
+        _word_body(doc, supporting.get("paragraphs", []), style["line"])
 
     if pkg.get("attached_documents"):
-        _word_heading(doc, "Attached documents supporting this application", page_break=False)
+        _word_heading(doc, "Attached documents supporting this application", style, page_break=False)
         for item in pkg["attached_documents"]:
             paragraph = doc.add_paragraph(style="List Bullet")
             _word_runs(paragraph, item)
-    _word_body(doc, pkg.get("closing", []))
+    _word_body(doc, pkg.get("closing", []), style["line"])
 
     buffer = BytesIO()
     doc.save(buffer)

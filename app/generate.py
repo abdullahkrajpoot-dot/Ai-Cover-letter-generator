@@ -2,6 +2,7 @@
 import io
 import json
 import re
+import secrets
 import urllib.request
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -313,6 +314,11 @@ JSON SCHEMA:
         pkg["itinerary"] = _build_itinerary(destination_city, travel_start, travel_end)
     _append_contact_details(pkg, email_address, phone_number)
     _convert_balance_currency(pkg, destination_country)
+    for row in pkg.get("itinerary", []):
+        row["activity"] = re.sub(
+            r"(?i)^suggested tourism visit:\s*", "", str(row.get("activity", ""))
+        )
+    pkg["document_style_seed"] = secrets.token_hex(8)
     return pkg
 
 
@@ -509,6 +515,7 @@ def _offline_package(files, notes, country, city, travel_start="", travel_end=""
         ],
         "missing": missing,
         "generation_mode": "local_fallback",
+        "document_style_seed": secrets.token_hex(8),
     }
     _append_contact_details(pkg, email_address, phone_number)
     _convert_balance_currency(pkg, country)
@@ -553,7 +560,7 @@ def _build_itinerary(city: str, start: str, end: str) -> list[dict]:
         elif current == last:
             activity = f"Hotel check-out and departure from {primary_city}"
         else:
-            activity = f"Suggested tourism visit: {attractions[(index - 1) % len(attractions)]}"
+            activity = attractions[(index - 1) % len(attractions)]
         rows.append({"date": current.strftime("%d %B %Y"), "location": primary_city, "activity": activity})
         current += timedelta(days=1)
         index += 1
