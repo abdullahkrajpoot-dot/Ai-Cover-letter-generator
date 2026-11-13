@@ -63,7 +63,9 @@ st.markdown(
     header[data-testid="stHeader"] { height:0 !important; min-height:0 !important; background:transparent !important; }
     [data-testid="stToolbar"], [data-testid="stHeaderActionElements"], [data-testid="stStatusWidget"],
     #MainMenu { display:none !important; visibility:hidden !important; }
-    .block-container { width:92vw; max-width:1500px; padding-top:1.4rem; padding-bottom:3rem; }
+    .block-container { width:80vw; max-width:80vw; margin-left:auto; margin-right:auto;
+        padding-top:1.4rem; padding-bottom:3rem; }
+    @media (max-width:900px) { .block-container { width:94vw; max-width:94vw; } }
     h1, h2, h3, p, label, .stMarkdown, [data-testid="stWidgetLabel"] { color:#18324f !important; }
     input, textarea, [data-baseweb="select"] > div { color:#18324f !important; background:#ffffff !important; }
     input::placeholder, textarea::placeholder { color:#8393a7 !important; }
@@ -112,6 +114,18 @@ st.markdown(
     [data-testid="stFileUploaderDropzone"] button { background:#ffffff !important; color:#1769c2 !important;
         border:1px solid #5f9ed4 !important; }
     [data-testid="stFileUploaderDropzone"] button * { color:#1769c2 !important; }
+    [data-testid="stFileUploaderFile"] { background:#ffffff !important; border:1px solid #b9d2e6 !important;
+        border-radius:10px !important; box-shadow:0 3px 10px rgba(40,88,132,.08) !important; }
+    [data-testid="stFileUploaderFile"] * { color:#18324f !important; }
+    [data-testid="stFileUploaderFileName"] { color:#18324f !important; font-weight:650 !important; }
+    [data-testid="stFileUploaderFileSize"] { color:#58728b !important; }
+    [data-testid="stFileUploaderFile"] svg { color:#1769c2 !important; fill:currentColor !important; }
+    [data-testid="stFileChip"] { background:#ffffff !important; border:1px solid #b9d2e6 !important;
+        border-radius:10px !important; box-shadow:0 3px 10px rgba(40,88,132,.08) !important; }
+    [data-testid="stFileChip"] * { color:#18324f !important; }
+    [data-testid="stFileChipName"] { color:#18324f !important; font-weight:650 !important; }
+    [data-testid="stFileChip"] > div:nth-child(2) > div:last-child { color:#58728b !important; }
+    [data-testid="stFileChip"] > div:first-child { background:#e8f3fd !important; color:#1769c2 !important; }
     [data-testid="stFileUploaderDropzone"]::after { content:"CNIC, Passport, Bank Statement, FRC/MRC, Job/Business Docs, Letterhead etc.";
         color:#385774; font-size:.84rem; line-height:1.35; margin-left:18px; align-self:center; display:flex; align-items:center; }
     [data-testid="stFileUploaderDropzoneInstructions"] { display:none !important; }
