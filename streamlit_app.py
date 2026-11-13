@@ -1,11 +1,13 @@
 """Modern Streamlit UI for document-led visa cover letter generation."""
 from pathlib import Path
 from html import escape
+import re
 import streamlit as st
 from dotenv import load_dotenv
 
-from app.export import package_docx
+from app.export import package_docx, package_pdf
 from app.generate import check_package, generate_from_documents, package_text
+from app.llm import complete
 from app import library
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
@@ -44,6 +46,38 @@ def package_preview_markdown(pkg: dict) -> str:
 
     parts.extend(str(text).strip() for text in pkg.get("closing", []) if str(text).strip())
     return "\n\n".join(parts)
+
+
+def apply_prompt_revision() -> None:
+    """Revise the editable letter from a plain-language user instruction."""
+    instruction = st.session_state.get("revision_prompt", "").strip()
+    current_letter = st.session_state.get("editable_preview", "").strip()
+    if not instruction:
+        st.session_state.revision_error = "Please describe the change you want."
+        return
+    prompt = f"""You are editing a professional visa cover letter.
+Apply only the requested changes while preserving all verified facts, section order, and professional tone.
+Do not invent dates, finances, employment, travel history, bookings, or personal details.
+Keep existing Markdown bold headings written as **HEADING**.
+Return the complete revised cover letter only, with no commentary or code fence.
+
+REQUESTED CHANGE:
+{instruction}
+
+CURRENT COVER LETTER:
+{current_letter}
+"""
+    try:
+        revised = complete(prompt, max_tokens=6000).strip()
+        revised = re.sub(r"^```(?:markdown|text)?\s*|\s*```$", "", revised, flags=re.I | re.S).strip()
+        if not revised:
+            raise ValueError("Provider returned an empty revision.")
+        st.session_state.editable_preview = revised
+        st.session_state.revision_prompt = ""
+        st.session_state.revision_error = ""
+        st.session_state.revision_success = "Requested changes applied."
+    except Exception as exc:
+        st.session_state.revision_error = f"Changes apply nahi ho sake: {exc}"
 
 st.set_page_config(
     page_title="Visa Cover Letter Generator",
@@ -303,13 +337,23 @@ if package:
     download_tab, preview_tab = st.tabs(["Download", "Document preview"])
     with download_tab:
         st.markdown("#### Your document is ready")
-        st.download_button(
-            "Download Word Document",
-            data=package_docx(package_for_download, **settings),
-            file_name="visa_cover_letter_package.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            use_container_width=True,
-        )
+        word_col, pdf_col = st.columns(2)
+        with word_col:
+            st.download_button(
+                "Download Word Document",
+                data=package_docx(package_for_download, **settings),
+                file_name="visa_cover_letter_package.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
+            )
+        with pdf_col:
+            st.download_button(
+                "Download PDF Document",
+                data=package_pdf(package_for_download, **settings),
+                file_name="visa_cover_letter_package.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
     with preview_tab:
         st.text_area(
             "Edit cover letter",
@@ -317,6 +361,22 @@ if package:
             height=620,
             help="Text edit karein; changes downloaded Word document mein bhi apply hongi.",
         )
+        st.text_area(
+            "Describe changes",
+            key="revision_prompt",
+            placeholder="Example: Purpose of visit ko short karein aur hotel booking ka sentence add karein.",
+            height=95,
+        )
+        st.button(
+            "Apply Changes to Cover Letter",
+            on_click=apply_prompt_revision,
+            use_container_width=True,
+            type="primary",
+        )
+        if st.session_state.get("revision_success"):
+            st.success(st.session_state.pop("revision_success"))
+        if st.session_state.get("revision_error"):
+            st.error(st.session_state.revision_error)
 
     st.divider()
     rating = st.select_slider(

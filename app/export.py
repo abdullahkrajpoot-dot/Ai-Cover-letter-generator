@@ -163,30 +163,41 @@ def package_pdf(pkg: dict, letterhead: bytes | None = None, letterhead_filename:
     y += 8
     short_line(f"Subject: {pkg.get('subject', '')}", bold=True, after=9)
     short_line("Dear Visa Officer,", after=8)
-    for text in pkg.get("cover_letter", []):
-        paragraph(text)
+    edited_preview = str(pkg.get("_edited_preview_text", "")).strip()
+    if edited_preview:
+        for block in (part.strip() for part in re.split(r"\n\s*\n", edited_preview)):
+            if not block:
+                continue
+            if re.fullmatch(r"\*\*[^*]+\*\*", block):
+                heading(block)
+            else:
+                paragraph(block)
+    else:
+        for text in pkg.get("cover_letter", []):
+            paragraph(text)
 
-    if pkg.get("purpose_of_visit"):
+    if not edited_preview and pkg.get("purpose_of_visit"):
         heading("Purpose of visit", force_page=True)
         for text in pkg["purpose_of_visit"]:
             paragraph(text)
 
-    if pkg.get("itinerary"):
+    if not edited_preview and pkg.get("itinerary"):
         heading("Travel itinerary", force_page=True)
         itinerary_table(pkg["itinerary"])
 
-    for index, section in enumerate(pkg.get("sections", [])):
+    for index, section in enumerate(pkg.get("sections", []) if not edited_preview else []):
         # Start major supporting material cleanly, then allow related short sections to share a page.
         heading(section.get("heading", "Supporting information"), force_page=index == 0 or y > A4.height * 0.62)
         for text in section.get("paragraphs", []):
             paragraph(text)
 
-    if pkg.get("attached_documents"):
+    if not edited_preview and pkg.get("attached_documents"):
         heading("Attached documents supporting this application", force_page=True)
         for item in pkg["attached_documents"]:
             paragraph(f"- {_plain(item)}", after=3, size=10)
-    for text in pkg.get("closing", []):
-        paragraph(text, after=6)
+    if not edited_preview:
+        for text in pkg.get("closing", []):
+            paragraph(text, after=6)
 
     # A subtle page number differentiates the layout from the reference while improving navigation.
     for number, pdf_page in enumerate(output, 1):
