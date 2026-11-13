@@ -10,6 +10,41 @@ from app import library
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
+
+def package_preview_markdown(pkg: dict) -> str:
+    """Build a readable Markdown preview with clearly bold section headings."""
+    parts = [str(text).strip() for text in pkg.get("cover_letter", []) if str(text).strip()]
+
+    purpose = [str(text).strip() for text in pkg.get("purpose_of_visit", []) if str(text).strip()]
+    if purpose:
+        parts.extend(["**PURPOSE OF VISIT**", *purpose])
+
+    itinerary = pkg.get("itinerary", [])
+    if itinerary:
+        parts.append("**TRAVEL ITINERARY**")
+        parts.extend(
+            f"- **{row.get('date', '')}** — {row.get('location', '')}: {row.get('activity', '')}"
+            for row in itinerary
+        )
+
+    for section in pkg.get("sections", []):
+        heading = str(section.get("heading", "")).strip()
+        if heading:
+            parts.append(f"**{heading}**")
+        parts.extend(
+            str(text).strip()
+            for text in section.get("paragraphs", [])
+            if str(text).strip()
+        )
+
+    documents = pkg.get("attached_documents", [])
+    if documents:
+        parts.append("**ATTACHED DOCUMENTS**")
+        parts.extend(f"- {item}" for item in documents)
+
+    parts.extend(str(text).strip() for text in pkg.get("closing", []) if str(text).strip())
+    return "\n\n".join(parts)
+
 st.set_page_config(
     page_title="Visa Cover Letter Generator",
     page_icon="📄",
@@ -227,7 +262,8 @@ if package:
             use_container_width=True,
         )
     with preview_tab:
-        st.text_area("Generated text", package_text(package), height=560, label_visibility="collapsed")
+        with st.container(border=True):
+            st.markdown(package_preview_markdown(package))
 
     st.divider()
     st.markdown("### Help the software improve")
