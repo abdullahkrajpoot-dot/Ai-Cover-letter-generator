@@ -208,30 +208,28 @@ generate = st.button(
 if generate:
     try:
         uploaded = [(f.name, f.getvalue()) for f in documents]
-        progress = st.progress(10, text="Preparing uploaded documents...")
-        progress.progress(35, text="Analysing applicant profile and supporting evidence...")
-        with st.spinner("Creating the cover letter package..."):
-            package = generate_from_documents(
-                visa_type=visa_type,
-                files=uploaded,
-                notes=trip_notes,
-                destination_country=destination_country,
-                destination_city=destination_city,
-                travel_start=travel_start.isoformat() if travel_start else "",
-                travel_end=travel_end.isoformat() if travel_end else "",
-                email_address=email_address,
-                phone_number=phone_number,
-            )
-            progress.progress(85, text="Formatting the final document...")
-            st.session_state.generated_package = package
-            detected_name = package.get("letterhead_document", "")
-            uploaded_map = dict(uploaded)
-            st.session_state.output_settings = {
-                "letterhead": uploaded_map.get(detected_name),
-                "letterhead_filename": detected_name if detected_name in uploaded_map else "",
-            }
-            st.session_state.generated_visa_type = visa_type
-            progress.progress(100, text="Cover letter ready")
+        progress = st.progress(20, text="Creating the cover letter...")
+        package = generate_from_documents(
+            visa_type=visa_type,
+            files=uploaded,
+            notes=trip_notes,
+            destination_country=destination_country,
+            destination_city=destination_city,
+            travel_start=travel_start.isoformat() if travel_start else "",
+            travel_end=travel_end.isoformat() if travel_end else "",
+            email_address=email_address,
+            phone_number=phone_number,
+        )
+        progress.progress(85, text="Creating the cover letter...")
+        st.session_state.generated_package = package
+        detected_name = package.get("letterhead_document", "")
+        uploaded_map = dict(uploaded)
+        st.session_state.output_settings = {
+            "letterhead": uploaded_map.get(detected_name),
+            "letterhead_filename": detected_name if detected_name in uploaded_map else "",
+        }
+        st.session_state.generated_visa_type = visa_type
+        progress.progress(100, text="Creating the cover letter...")
         progress.empty()
     except Exception as exc:
         st.error(f"Cover letter generate nahi ho saka: {exc}")
@@ -257,7 +255,6 @@ if package:
     download_tab, preview_tab = st.tabs(["Download", "Document preview"])
     with download_tab:
         st.markdown("#### Your document is ready")
-        st.caption("Open it in Microsoft Word to review, update or finalise the letter.")
         st.download_button(
             "Download Word Document",
             data=package_docx(package, **settings),
@@ -270,10 +267,8 @@ if package:
             st.markdown(package_preview_markdown(package))
 
     st.divider()
-    st.markdown("### Help the software improve")
-    st.caption("Only ratings of 4 or 5 are saved as future style examples. Lower-rated letters are never learned.")
     rating = st.select_slider(
-        "Rate this generated letter",
+        "Rate this letter — 4–5 stars improve future results",
         options=[1, 2, 3, 4, 5],
         value=3,
         format_func=lambda value: f"{value} star{'s' if value != 1 else ''}",
