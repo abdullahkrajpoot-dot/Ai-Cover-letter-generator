@@ -83,6 +83,12 @@ st.markdown(
         box-shadow:0 0 0 1px #a9c8e2 !important; }
     [data-testid="stTextInputRootElement"] { background:#ffffff !important;
         border:1px solid #a9c8e2 !important; box-shadow:none !important; }
+    [data-testid="stTextInputField"] { background:#ffffff !important; color:#18324f !important;
+        -webkit-text-fill-color:#18324f !important; opacity:1 !important; }
+    [data-testid="stTextInputField"]:-webkit-autofill,
+    [data-testid="stTextInputField"]:-webkit-autofill:hover,
+    [data-testid="stTextInputField"]:-webkit-autofill:focus { -webkit-text-fill-color:#18324f !important;
+        -webkit-box-shadow:0 0 0 1000px #ffffff inset !important; box-shadow:0 0 0 1000px #ffffff inset !important; }
     [data-testid="stTextInputRootElement"]:hover,
     [data-testid="stTextInputRootElement"]:focus-within { background:#ffffff !important;
         border-color:#75a9d1 !important; box-shadow:0 0 0 1px rgba(36,120,199,.12) !important; }
