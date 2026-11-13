@@ -1,12 +1,11 @@
 """Modern Streamlit UI for document-led visa cover letter generation."""
 from pathlib import Path
-from html import escape
 import re
 import streamlit as st
 from dotenv import load_dotenv
 
 from app.export import package_docx, package_pdf
-from app.generate import check_package, generate_from_documents, package_text
+from app.generate import generate_from_documents, package_text
 from app.llm import complete
 from app import library
 
@@ -216,10 +215,6 @@ st.markdown(
     [data-testid="stAlert"] > div { background:transparent !important; }
     [data-testid="stAlert"] p, [data-testid="stAlert"] span,
     [data-testid="stAlert"] div { color:#173653 !important; -webkit-text-fill-color:#173653 !important; }
-    .missing-alert { background:#fff8e7; color:#5f3b00; border:1px solid #e7bd64; border-left:5px solid #d89018;
-        border-radius:12px; padding:15px 17px; font-size:.95rem; line-height:1.55;
-        box-shadow:0 6px 16px rgba(117,76,10,.08); }
-    .missing-alert strong { color:#4b2e00; }
     hr { border-color:#2b3a50 !important; }
     div[data-testid="stTextArea"] textarea { font-family:Georgia,'Times New Roman',serif; line-height:1.55; }
     @media(max-width:760px) {
@@ -320,12 +315,6 @@ if package:
     missing_count = len(package.get("missing", []))
     if not missing_count:
         st.success("Ready for review and download.")
-
-    for issue in check_package(package, active_visa_type):
-        st.markdown(
-            f'<div class="missing-alert"><strong>Missing information:</strong> {escape(issue)}</div>',
-            unsafe_allow_html=True,
-        )
 
     if "editable_preview" not in st.session_state:
         st.session_state.editable_preview = package_preview_markdown(package)
