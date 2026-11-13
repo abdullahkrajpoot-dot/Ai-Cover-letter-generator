@@ -1,5 +1,6 @@
 """Modern Streamlit UI for document-led visa cover letter generation."""
 from pathlib import Path
+from html import escape
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -94,7 +95,16 @@ st.markdown(
     .result-detail { color:var(--muted); font-size:.82rem; margin-top:6px; line-height:1.5; }
     [data-testid="stTabs"] button { color:#536b84 !important; }
     [data-testid="stTabs"] button[aria-selected="true"] { color:#18324f !important; }
-    [data-testid="stAlert"] { border-width:1px !important; }
+    [data-testid="stAlert"] { background:#f7fbff !important; border:1px solid #9fc4e2 !important;
+        border-left:5px solid #2478c7 !important; border-radius:12px !important;
+        box-shadow:0 6px 16px rgba(40,88,132,.08); }
+    [data-testid="stAlert"] > div { background:transparent !important; }
+    [data-testid="stAlert"] p, [data-testid="stAlert"] span,
+    [data-testid="stAlert"] div { color:#173653 !important; -webkit-text-fill-color:#173653 !important; }
+    .missing-alert { background:#fff8e7; color:#5f3b00; border:1px solid #e7bd64; border-left:5px solid #d89018;
+        border-radius:12px; padding:15px 17px; font-size:.95rem; line-height:1.55;
+        box-shadow:0 6px 16px rgba(117,76,10,.08); }
+    .missing-alert strong { color:#4b2e00; }
     hr { border-color:#2b3a50 !important; }
     div[data-testid="stTextArea"] textarea { font-family:Georgia,'Times New Roman',serif; line-height:1.55; }
     @media(max-width:760px) {
@@ -200,7 +210,10 @@ if package:
     if package.get("generation_mode") == "local_fallback":
         st.info("Safe local document analysis was used. Review missing details before submission.")
     for issue in check_package(package, active_visa_type):
-        st.error(issue)
+        st.markdown(
+            f'<div class="missing-alert"><strong>Missing information:</strong> {escape(issue)}</div>',
+            unsafe_allow_html=True,
+        )
 
     download_tab, preview_tab = st.tabs(["Download", "Document preview"])
     with download_tab:
