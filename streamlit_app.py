@@ -264,6 +264,7 @@ if generate:
         )
         progress.progress(85, text="Creating the cover letter...")
         st.session_state.generated_package = package
+        st.session_state.editable_preview = package_preview_markdown(package)
         detected_name = package.get("letterhead_document", "")
         uploaded_map = dict(uploaded)
         st.session_state.output_settings = {
@@ -286,27 +287,36 @@ if package:
     if not missing_count:
         st.success("Ready for review and download.")
 
-    if package.get("generation_mode") == "local_fallback":
-        st.info("Safe local document analysis was used. Review missing details before submission.")
     for issue in check_package(package, active_visa_type):
         st.markdown(
             f'<div class="missing-alert"><strong>Missing information:</strong> {escape(issue)}</div>',
             unsafe_allow_html=True,
         )
 
+    if "editable_preview" not in st.session_state:
+        st.session_state.editable_preview = package_preview_markdown(package)
+    package_for_download = dict(package)
+    original_preview = package_preview_markdown(package)
+    if st.session_state.editable_preview.strip() != original_preview.strip():
+        package_for_download["_edited_preview_text"] = st.session_state.editable_preview
+
     download_tab, preview_tab = st.tabs(["Download", "Document preview"])
     with download_tab:
         st.markdown("#### Your document is ready")
         st.download_button(
             "Download Word Document",
-            data=package_docx(package, **settings),
+            data=package_docx(package_for_download, **settings),
             file_name="visa_cover_letter_package.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             use_container_width=True,
         )
     with preview_tab:
-        with st.container(border=True):
-            st.markdown(package_preview_markdown(package))
+        st.text_area(
+            "Edit cover letter",
+            key="editable_preview",
+            height=620,
+            help="Text edit karein; changes downloaded Word document mein bhi apply hongi.",
+        )
 
     st.divider()
     rating = st.select_slider(

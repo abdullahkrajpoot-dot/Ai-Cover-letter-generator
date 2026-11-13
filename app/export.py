@@ -343,13 +343,18 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
     subject.add_run("Subject: ").bold = True
     _word_runs(subject, pkg.get("subject", ""))
     doc.add_paragraph("Dear Visa Officer,")
-    _word_body(doc, pkg.get("cover_letter", []), style["line"])
+    edited_preview = str(pkg.get("_edited_preview_text", "")).strip()
+    if edited_preview:
+        editable_paragraphs = [part.strip() for part in re.split(r"\n\s*\n", edited_preview) if part.strip()]
+        _word_body(doc, editable_paragraphs, style["line"])
+    else:
+        _word_body(doc, pkg.get("cover_letter", []), style["line"])
 
-    if pkg.get("purpose_of_visit"):
+    if not edited_preview and pkg.get("purpose_of_visit"):
         _word_heading(doc, "Purpose of visit", style, page_break=False)
         _word_body(doc, pkg["purpose_of_visit"], style["line"])
 
-    if pkg.get("itinerary"):
+    if not edited_preview and pkg.get("itinerary"):
         _word_heading(doc, "Travel itinerary", style, page_break=False)
         table = doc.add_table(rows=1, cols=3)
         table.autofit = False
@@ -373,16 +378,17 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
                 paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER if cell is not cells[2] else WD_ALIGN_PARAGRAPH.LEFT
                 _word_runs(paragraph, value)
 
-    for index, supporting in enumerate(pkg.get("sections", [])):
+    for index, supporting in enumerate(pkg.get("sections", []) if not edited_preview else []):
         _word_heading(doc, supporting.get("heading", "Supporting information"), style, page_break=False)
         _word_body(doc, supporting.get("paragraphs", []), style["line"])
 
-    if pkg.get("attached_documents"):
+    if not edited_preview and pkg.get("attached_documents"):
         _word_heading(doc, "Attached documents supporting this application", style, page_break=False)
         for item in pkg["attached_documents"]:
             paragraph = doc.add_paragraph(style="List Bullet")
             _word_runs(paragraph, item)
-    _word_body(doc, pkg.get("closing", []), style["line"])
+    if not edited_preview:
+        _word_body(doc, pkg.get("closing", []), style["line"])
 
     buffer = BytesIO()
     doc.save(buffer)
