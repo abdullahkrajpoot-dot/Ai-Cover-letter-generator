@@ -67,6 +67,25 @@ st.markdown(
     h1, h2, h3, p, label, .stMarkdown, [data-testid="stWidgetLabel"] { color:#18324f !important; }
     input, textarea, [data-baseweb="select"] > div { color:#18324f !important; background:#ffffff !important; }
     input::placeholder, textarea::placeholder { color:#8393a7 !important; }
+    [data-testid="stTextInput"] [data-baseweb="input"] { border:1px solid #a9c8e2 !important;
+        box-shadow:none !important; overflow:hidden; }
+    [data-testid="stTextInput"] > div > div { border-color:#a9c8e2 !important;
+        box-shadow:none !important; }
+    [data-testid="stTextInput"] [data-baseweb="input"] > div,
+    [data-testid="stTextInput"] [data-baseweb="base-input"],
+    [data-testid="stTextInput"] input { border:0 !important; outline:0 !important; box-shadow:none !important; }
+    [data-testid="stTextInput"] [data-baseweb="input"]:hover,
+    [data-testid="stTextInput"] [data-baseweb="input"]:focus-within { border-color:#75a9d1 !important;
+        box-shadow:0 0 0 1px rgba(36,120,199,.12) !important; }
+    [data-testid="stTextInput"] div { border-top-color:#a9c8e2 !important;
+        border-bottom-color:#a9c8e2 !important; }
+    div[data-testid="stTextInput"] div[data-baseweb="input"] { border:none !important;
+        box-shadow:0 0 0 1px #a9c8e2 !important; }
+    [data-testid="stTextInputRootElement"] { background:#ffffff !important;
+        border:1px solid #a9c8e2 !important; box-shadow:none !important; }
+    [data-testid="stTextInputRootElement"]:hover,
+    [data-testid="stTextInputRootElement"]:focus-within { background:#ffffff !important;
+        border-color:#75a9d1 !important; box-shadow:0 0 0 1px rgba(36,120,199,.12) !important; }
     .simple-head { position:relative; overflow:hidden; display:flex; align-items:center; min-height:150px;
         background:linear-gradient(120deg,#135f9f,#167fb3 68%,#26a6ad); padding:30px 34px;
         margin-bottom:22px; border:1px solid #3ca4c5; border-radius:18px; box-shadow:0 15px 34px rgba(25,94,143,.24); }
