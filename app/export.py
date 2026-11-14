@@ -59,16 +59,27 @@ def package_pdf(pkg: dict, letterhead: bytes | None = None, letterhead_filename:
     output = pymupdf.open()
     stationery_pdf = None
     stationery_image = None
+    full_page_stationery_image = False
     if letterhead:
         if letterhead_filename.lower().endswith(".pdf") or letterhead[:4] == b"%PDF":
             stationery_pdf = pymupdf.open(stream=letterhead, filetype="pdf")
         else:
             stationery_image = letterhead
+            try:
+                image_info = pymupdf.Pixmap(letterhead)
+                full_page_stationery_image = image_info.height >= image_info.width * 1.1
+            except Exception:
+                # Most uploaded stationery images are portrait pages. Falling back
+                # to full-page placement avoids shrinking them into a header strip.
+                full_page_stationery_image = True
 
-    # Dedicated stationery reserves the same physical print area on every page.
-    top = 184 if letterhead else 64
-    bottom = 86 if letterhead else 55
-    left, right = 58.0, A4.width - 58.0
+    # Keep body text inside the clear writing area of full-page stationery.
+    # The larger footer reserve prevents contact details and decorative artwork
+    # from being covered on multi-page letters.
+    top = 200 if letterhead else 64
+    bottom = 132 if letterhead else 55
+    left = 66.0 if letterhead else 58.0
+    right = A4.width - left
     content_width = right - left
     page = None
     y = 0.0
@@ -81,7 +92,15 @@ def package_pdf(pkg: dict, letterhead: bytes | None = None, letterhead_filename:
         if stationery_pdf:
             page.show_pdf_page(page.rect, stationery_pdf, 0, overlay=False)
         elif stationery_image:
-            page.insert_image(pymupdf.Rect(42, 10, A4.width - 42, 150), stream=stationery_image, keep_proportion=True, overlay=False)
+            if full_page_stationery_image:
+                page.insert_image(page.rect, stream=stationery_image, keep_proportion=False, overlay=False)
+            else:
+                page.insert_image(
+                    pymupdf.Rect(42, 12, A4.width - 42, 160),
+                    stream=stationery_image,
+                    keep_proportion=True,
+                    overlay=False,
+                )
         y = float(top)
 
     def ensure(height: float):
@@ -199,13 +218,15 @@ def package_pdf(pkg: dict, letterhead: bytes | None = None, letterhead_filename:
         for text in pkg.get("closing", []):
             paragraph(text, after=6)
 
-    # A subtle page number differentiates the layout from the reference while improving navigation.
-    for number, pdf_page in enumerate(output, 1):
-        pdf_page.insert_textbox(
-            pymupdf.Rect(A4.width - 95, A4.height - 34, A4.width - 48, A4.height - 18),
-            f"Page {number}", fontname="Helvetica", fontsize=8, color=(0.4, 0.4, 0.4),
-            align=pymupdf.TEXT_ALIGN_RIGHT,
-        )
+    # Page numbers are omitted on company stationery so they never cover its
+    # footer artwork or contact details.
+    if not letterhead:
+        for number, pdf_page in enumerate(output, 1):
+            pdf_page.insert_textbox(
+                pymupdf.Rect(A4.width - 95, A4.height - 34, A4.width - 48, A4.height - 18),
+                f"Page {number}", fontname="Helvetica", fontsize=8, color=(0.4, 0.4, 0.4),
+                align=pymupdf.TEXT_ALIGN_RIGHT,
+            )
 
     if stationery_pdf:
         stationery_pdf.close()
