@@ -323,6 +323,28 @@ if package:
     if st.session_state.editable_preview.strip() != original_preview.strip():
         package_for_download["_edited_preview_text"] = st.session_state.editable_preview
 
+    with st.expander("AI Cover Letter Editor", expanded=True):
+        st.caption("Kisi bhi change ka prompt dein; editor complete letter mein requested change apply karega.")
+        st.text_area(
+            "What would you like to change?",
+            key="revision_prompt",
+            placeholder=(
+                "Example: First paragraph ki heading change kar do, purpose of visit short karo, "
+                "ya financial section ko more professional bana do."
+            ),
+            height=95,
+        )
+        st.button(
+            "Apply AI Changes",
+            on_click=apply_prompt_revision,
+            use_container_width=True,
+            type="primary",
+        )
+        if st.session_state.get("revision_success"):
+            st.success(st.session_state.pop("revision_success"))
+        if st.session_state.get("revision_error"):
+            st.error(st.session_state.revision_error)
+
     download_tab, preview_tab = st.tabs(["Download", "Document preview"])
     with download_tab:
         st.markdown("#### Your document is ready")
@@ -350,22 +372,6 @@ if package:
             height=620,
             help="Text edit karein; changes downloaded Word document mein bhi apply hongi.",
         )
-        st.text_area(
-            "Describe changes",
-            key="revision_prompt",
-            placeholder="Example: Purpose of visit ko short karein aur hotel booking ka sentence add karein.",
-            height=95,
-        )
-        st.button(
-            "Apply Changes to Cover Letter",
-            on_click=apply_prompt_revision,
-            use_container_width=True,
-            type="primary",
-        )
-        if st.session_state.get("revision_success"):
-            st.success(st.session_state.pop("revision_success"))
-        if st.session_state.get("revision_error"):
-            st.error(st.session_state.revision_error)
 
     st.divider()
     rating = st.select_slider(
