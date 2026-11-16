@@ -235,6 +235,17 @@ filename in letterhead_document. Do not treat ordinary invoices, employment lett
 statements, or business documents printed on their issuer's stationery as the applicant's
 cover-letter template. Return an empty string when no dedicated template is provided.
 
+BUSINESS INVITATION HANDLING:
+- Inspect all files for a genuine business invitation, conference invitation, meeting invitation,
+  host-company letter, or event invitation.
+- When one is present, add a dedicated developed paragraph directly inside cover_letter explaining
+  the verified inviter/host organisation, business purpose, meeting or event, location and dates.
+- Use only details explicitly printed in the invitation. If a detail is absent, omit it rather than
+  guessing. Explain that the visit is temporary and does not constitute local employment.
+- Align purpose_of_visit and the subject with a business visitor purpose when supported by the
+  invitation; do not describe a documented business trip as tourism.
+- When no business invitation is attached, do not mention an invitation or business host.
+
 STAFF NOTES (use only if supplied):
 {notes or '(none)'}
 CONFIRMED TRAVEL DATES: {travel_start or '(not supplied)'} to {travel_end or '(not supplied)'}
@@ -436,18 +447,37 @@ def _offline_package(files, notes, country, city, travel_start="", travel_end=""
         ("employment letter", "employment letter"), ("noc", "NOC letter"),
         ("salary slip", "salary slips"), ("payslip", "salary slips"),
     ) if term in combined_lower]
+    invitation_terms = (
+        "business invitation", "invitation letter", "letter of invitation",
+        "conference invitation", "meeting invitation", "invited by", "host company",
+    )
+    business_context_terms = ("business", "company", "meeting", "conference", "exhibition", "trade fair", "event")
+    has_business_invitation = any(term in combined_lower for term in invitation_terms) or (
+        "invitation" in combined_lower and any(term in combined_lower for term in business_context_terms)
+    )
 
     trip = f"**{city}, {country}**"
+    visit_description = "a short and temporary business visit" if has_business_invitation else "a short and temporary visit"
+    stated_purpose = "the documented business meetings or event" if has_business_invitation else "tourism"
     cover = [
         f"I, **{name}**, respectfully submit my application for a temporary visitor visa to **{country}**. "
-        f"I intend to make a short and temporary visit to **{city}** for tourism. My passport, identity, family and financial records enclosed with this application are provided so that my circumstances can be assessed from the available documentary evidence.",
-        "This application is presented as a genuine temporary-resident request. The proposed journey is limited to tourism and personal sightseeing, and it does not involve employment, study or any activity outside the conditions of visitor status.",
+        f"I intend to make {visit_description} to **{city}** for {stated_purpose}. My passport, identity, family and financial records enclosed with this application are provided so that my circumstances can be assessed from the available documentary evidence.",
+        f"This application is presented as a genuine temporary-resident request. The proposed journey is limited to {stated_purpose}, and it does not involve local employment, study or any activity outside the conditions of visitor status.",
         "The enclosed records should be read together as a consistent set of supporting evidence. Identity documents establish the applicant's particulars, family registration records explain the documented family structure, and the available banking material demonstrates the financial evidence submitted for review.",
         f"I understand that permission to enter **{country}** is temporary and subject to immigration conditions. I undertake to respect the authorised period of stay, maintain lawful visitor status and leave **{country}** at the end of the approved visit.",
         "I respectfully request an assessment based on the documents actually supplied. Where travel dates, accommodation, bookings or other trip details are not shown in the uploaded records, those details should be completed and verified before final submission rather than assumed in this letter.",
     ]
+    if has_business_invitation:
+        cover.insert(2,
+            "I have enclosed the uploaded **business invitation** as evidence of the stated purpose of this temporary visit. "
+            "The reviewing officer may verify the host organisation, proposed meeting or event, location and any stated dates directly from that document. "
+            "I will restrict my activities to the authorised business-visitor purpose and will not undertake local employment."
+        )
     purpose = [
-        f"The purpose of my proposed visit to {trip} is tourism and leisure. I wish to experience the destination's recognised public attractions, local culture and landmarks during a temporary and carefully limited stay.",
+        (f"The purpose of my proposed visit to {trip} is the temporary business activity documented in the enclosed invitation. "
+         "My attendance will remain limited to the verified meeting, event or host-company engagement described in that document."
+         if has_business_invitation else
+         f"The purpose of my proposed visit to {trip} is tourism and leisure. I wish to experience the destination's recognised public attractions, local culture and landmarks during a temporary and carefully limited stay."),
         "My activities will remain consistent with visitor status. I will not undertake unauthorised employment, enrol in a course of study, or engage in any activity that would require a different immigration authorisation.",
         "The final travel programme should be aligned with confirmed dates, accommodation and transport bookings. A day-by-day itinerary should only be included once those details are supported by the applicant's records or staff notes.",
         f"At the conclusion of the authorised visit, I will depart **{country}** in accordance with the conditions attached to any visa granted. This undertaking forms an essential part of my temporary travel request.",
@@ -503,7 +533,11 @@ def _offline_package(files, notes, country, city, travel_start="", travel_end=""
         "profile_category": category,
         "category_reason": category_reason,
         "letterhead_document": _detect_letterhead_filename(files),
-        "subject": f"Application for Temporary Resident Visa - Tourism in {country}",
+        "subject": (
+            f"Application for Temporary Business Visitor Visa - {country}"
+            if has_business_invitation else
+            f"Application for Temporary Resident Visa - Tourism in {country}"
+        ),
         "addressee": ["The Visa Officer", f"Embassy / Visa Office of {country}"],
         "cover_letter": cover,
         "purpose_of_visit": purpose,
