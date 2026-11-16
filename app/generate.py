@@ -4,6 +4,8 @@ import json
 import re
 import secrets
 import urllib.request
+import pycountry
+from babel.numbers import get_territory_currencies
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -173,15 +175,15 @@ def generate_from_documents(
     phone_number: str = "",
 ) -> dict:
     """Scan all documents and generate the package in one model request."""
-    supported = {"Canada", "United Kingdom", "Australia", "New Zealand"}
-    if destination_country not in supported:
-        raise ValueError("Supported countries: Canada, United Kingdom, Australia, and New Zealand.")
     country_style = {
         "Canada": "Canadian English; address the responsible Canadian visa office",
         "United Kingdom": "British English; address UK Visas and Immigration / the Entry Clearance Officer",
         "Australia": "Australian English; address the Australian visa decision maker",
         "New Zealand": "New Zealand English; address Immigration New Zealand / the Visa Officer",
-    }[destination_country]
+    }.get(
+        destination_country,
+        f"professional international English appropriate for {destination_country}; address the relevant visa officer, embassy, consulate, or immigration authority",
+    )
     learned = retrieve(
         f"{visa_type} {destination_country} {destination_city} {notes}",
         country=destination_country,
@@ -199,8 +201,8 @@ Read every attached applicant document, cross-check the facts, and create a prof
 
 COUNTRY-SPECIFIC WRITING:
 - Use {country_style}.
-- Preserve the same professional evidence-led structure across Canada, the United Kingdom,
-  Australia and New Zealand, while using the selected country's correct authority and terminology.
+- Preserve the same professional evidence-led structure for every destination while using
+  the selected country's correct visa authority, terminology, spelling conventions, and currency.
 
 HIGH-RATED APPROVED EXAMPLES FOR STYLE ONLY:
 {learned_examples}
@@ -526,6 +528,18 @@ DESTINATION_CURRENCY = {
     "Canada": "CAD", "United Kingdom": "GBP", "Australia": "AUD", "New Zealand": "NZD",
 }
 
+
+def _destination_currency(country: str) -> str | None:
+    """Return the active legal-tender currency for an ISO destination country."""
+    if country in DESTINATION_CURRENCY:
+        return DESTINATION_CURRENCY[country]
+    try:
+        territory = pycountry.countries.lookup(country)
+        currencies = get_territory_currencies(territory.alpha_2, tender=True)
+        return currencies[0] if currencies else None
+    except (LookupError, AttributeError, TypeError):
+        return None
+
 # Used only when the live exchange service is unavailable. The output is explicitly
 # labelled approximate, so a temporary network failure never falls back to displaying PKR.
 FALLBACK_PKR_RATES = {"CAD": 0.0050, "GBP": 0.0027, "AUD": 0.0055, "NZD": 0.0061}
@@ -606,7 +620,7 @@ def _exchange_rate(currency: str) -> float | None:
 
 
 def _convert_balance_currency(pkg: dict, country: str) -> None:
-    currency = DESTINATION_CURRENCY.get(country)
+    currency = _destination_currency(country)
     if not currency:
         return
     rate = _exchange_rate(currency)

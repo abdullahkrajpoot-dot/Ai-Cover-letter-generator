@@ -2,6 +2,7 @@
 from pathlib import Path
 import re
 import streamlit as st
+import pycountry
 from dotenv import load_dotenv
 
 from app.export import package_docx, package_pdf
@@ -10,6 +11,8 @@ from app.llm import complete
 from app import library
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
+
+COUNTRY_NAMES = sorted({country.name for country in pycountry.countries})
 
 
 def package_preview_markdown(pkg: dict) -> str:
@@ -252,7 +255,12 @@ documents = st.file_uploader(
 
 c1, c2 = st.columns(2)
 destination_city = c1.text_input("City / cities", placeholder="e.g. Toronto, London, Sydney or Auckland")
-destination_country = c2.selectbox("Destination country", ["Canada", "United Kingdom", "Australia", "New Zealand"])
+destination_country = c2.selectbox(
+    "Destination country",
+    COUNTRY_NAMES,
+    index=COUNTRY_NAMES.index("Canada"),
+    placeholder="Type to search any country",
+)
 visa_type = "visit"
 travel_dates = st.date_input(
     "Travel dates",
