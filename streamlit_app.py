@@ -222,6 +222,13 @@ st.markdown(
     [data-testid="stAlert"] > div { background:transparent !important; }
     [data-testid="stAlert"] p, [data-testid="stAlert"] span,
     [data-testid="stAlert"] div { color:#173653 !important; -webkit-text-fill-color:#173653 !important; }
+    [data-testid="stFeedback"] { gap:7px !important; }
+    [data-testid="stFeedback"] button { background:transparent !important; border:0 !important;
+        box-shadow:none !important; min-height:38px !important; padding:3px !important; }
+    [data-testid="stFeedbackButton"] svg { color:#cbd5e1 !important; fill:#cbd5e1 !important; width:27px !important; height:27px !important; }
+    [data-testid="stFeedbackButtonActive"] svg { color:#f5b914 !important; fill:#f5b914 !important; width:27px !important; height:27px !important; }
+    .rating-title { color:#6f86a0; font-size:1rem; margin-bottom:7px; }
+    .rating-thanks { color:#6f86a0; font-size:1rem; margin-top:7px; }
     hr { border-color:#2b3a50 !important; }
     div[data-testid="stTextArea"] textarea { font-family:Georgia,'Times New Roman',serif; line-height:1.55; }
     @media(max-width:760px) {
@@ -308,6 +315,9 @@ if generate:
         progress.progress(85, text="Creating the cover letter...")
         st.session_state.generated_package = package
         st.session_state.editable_preview = package_preview_markdown(package)
+        st.session_state.generated_destination_country = destination_country
+        st.session_state.pop("letter_rating", None)
+        st.session_state.pop("last_saved_rating_token", None)
         detected_name = package.get("letterhead_document", "")
         uploaded_map = dict(uploaded)
         st.session_state.output_settings = {
@@ -387,26 +397,25 @@ if package:
         )
 
     st.divider()
-    rating = st.select_slider(
-        "Rate this letter — 4–5 stars improve future results",
-        options=[1, 2, 3, 4, 5],
-        value=3,
-        format_func=lambda value: f"{value} star{'s' if value != 1 else ''}",
-    )
-    if st.button("Submit rating", use_container_width=True):
-        feedback_key = library.feedback_key(package_text(package), destination_country, active_visa_type)
-        if rating >= 4:
-            saved = library.add_letter(
-                package_text(package),
-                active_visa_type,
-                country=destination_country,
-                source="self_learning",
-                rating=rating,
-            )
-            if saved:
-                st.success("High-rated letter learned. Future letters can use its approved structure and style.")
-            else:
-                st.info("This approved letter was already learned earlier.")
-        else:
-            library.record_feedback(feedback_key, rating, learned=False)
-            st.info("Rating saved, but this letter was not added to learning examples.")
+    rating_left, rating_col, rating_right = st.columns([1.3, 1, 1.3])
+    with rating_col:
+        st.markdown('<div class="rating-title">Rate this cover letter</div>', unsafe_allow_html=True)
+        rating_index = st.feedback("stars", key="letter_rating")
+        if rating_index is not None:
+            rating = rating_index + 1
+            rating_country = st.session_state.get("generated_destination_country", destination_country)
+            feedback_key = library.feedback_key(package_text(package), rating_country, active_visa_type)
+            rating_token = f"{feedback_key}:{rating}"
+            if st.session_state.get("last_saved_rating_token") != rating_token:
+                if rating >= 4:
+                    library.add_letter(
+                        package_text(package),
+                        active_visa_type,
+                        country=rating_country,
+                        source="self_learning",
+                        rating=rating,
+                    )
+                else:
+                    library.record_feedback(feedback_key, rating, learned=False)
+                st.session_state.last_saved_rating_token = rating_token
+            st.markdown(f'<div class="rating-thanks">Thank you — {rating}/5</div>', unsafe_allow_html=True)
