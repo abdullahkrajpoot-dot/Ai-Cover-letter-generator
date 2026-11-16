@@ -74,7 +74,6 @@ CURRENT COVER LETTER:
         st.session_state.editable_preview = revised
         st.session_state.revision_prompt = ""
         st.session_state.revision_error = ""
-        st.session_state.revision_success = "Requested changes applied."
     except Exception as exc:
         st.session_state.revision_error = f"Changes apply nahi ho sake: {exc}"
 
@@ -202,6 +201,11 @@ st.markdown(
     .stButton > button[kind="primary"] { background:#1769c2; color:#ffffff !important; border:0;
         box-shadow:0 9px 22px rgba(29,99,213,.22); }
     .stButton > button[kind="primary"] p { color:#ffffff !important; }
+    div[data-testid="stExpander"] .stButton > button { background:linear-gradient(90deg,#1769c2,#168bb8) !important;
+        color:#ffffff !important; border:1px solid #1777b8 !important; min-height:44px; }
+    div[data-testid="stExpander"] .stButton > button *,
+    div[data-testid="stExpander"] .stButton > button p { color:#ffffff !important;
+        -webkit-text-fill-color:#ffffff !important; }
     .result-card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px 20px;
         box-shadow:0 10px 28px rgba(0,0,0,.22); height:100%; }
     .result-label { color:var(--muted); font-size:.73rem; text-transform:uppercase; letter-spacing:.1em; font-weight:700; }
@@ -269,12 +273,14 @@ travel_start = travel_dates[0] if isinstance(travel_dates, (tuple, list)) and le
 travel_end = travel_dates[1] if isinstance(travel_dates, (tuple, list)) and len(travel_dates) > 1 else None
 
 st.write("")
-generate = st.button(
-    "Generate Cover Letter",
-    type="primary",
-    use_container_width=True,
-    disabled=not documents,
-)
+generate_left, generate_col, generate_right = st.columns([1, 3, 1])
+with generate_col:
+    generate = st.button(
+        "Generate Cover Letter",
+        type="primary",
+        use_container_width=True,
+        disabled=not documents,
+    )
 
 if generate:
     try:
@@ -311,7 +317,7 @@ if package:
     settings = st.session_state.get("output_settings", {})
     active_visa_type = st.session_state.get("generated_visa_type", visa_type)
     st.divider()
-    st.subheader("Generated package")
+    st.subheader("Your Cover Letter is Ready")
     missing_count = len(package.get("missing", []))
     if not missing_count:
         st.success("Ready for review and download.")
@@ -324,7 +330,6 @@ if package:
         package_for_download["_edited_preview_text"] = st.session_state.editable_preview
 
     with st.expander("AI Cover Letter Editor", expanded=True):
-        st.caption("Kisi bhi change ka prompt dein; editor complete letter mein requested change apply karega.")
         st.text_area(
             "What would you like to change?",
             key="revision_prompt",
@@ -334,14 +339,14 @@ if package:
             ),
             height=95,
         )
-        st.button(
-            "Apply AI Changes",
-            on_click=apply_prompt_revision,
-            use_container_width=True,
-            type="primary",
-        )
-        if st.session_state.get("revision_success"):
-            st.success(st.session_state.pop("revision_success"))
+        ai_button_col, ai_button_space = st.columns([1, 3])
+        with ai_button_col:
+            st.button(
+                "Apply AI Changes",
+                on_click=apply_prompt_revision,
+                use_container_width=True,
+                type="primary",
+            )
         if st.session_state.get("revision_error"):
             st.error(st.session_state.revision_error)
 
