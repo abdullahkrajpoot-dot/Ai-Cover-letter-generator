@@ -161,6 +161,10 @@ st.markdown(
     [data-testid="stFileChipName"] { color:#18324f !important; font-weight:650 !important; }
     [data-testid="stFileChip"] > div:nth-child(2) > div:last-child { color:#58728b !important; }
     [data-testid="stFileChip"] > div:first-child { background:#e8f3fd !important; color:#1769c2 !important; }
+    .st-key-applicant_documents [data-testid="stFileUploaderDropzone"]::after {
+        content:"CNIC, Passport, Bank Statement, FRC/MRC, Job/Business documents etc.";
+        color:#385774; font-size:.84rem; line-height:1.35; margin-left:18px;
+        align-self:center; display:flex; align-items:center; }
     [data-testid="stFileUploaderDropzoneInstructions"] { display:none !important; }
     [data-testid="stFileUploaderDropzone"] small { display:none !important; }
     [data-testid="stDateInput"] { color-scheme:light !important; }
@@ -255,9 +259,9 @@ documents = st.file_uploader(
     "Upload applicant documents",
     type=["pdf", "png", "jpg", "jpeg", "txt"],
     accept_multiple_files=True,
+    key="applicant_documents",
     label_visibility="collapsed",
 )
-st.caption("CNIC, Passport, Bank Statement, FRC/MRC, Job/Business documents etc.")
 
 c1, c2 = st.columns(2)
 destination_city = c1.text_input("City / cities", placeholder="e.g. Toronto, London, Sydney or Auckland")
