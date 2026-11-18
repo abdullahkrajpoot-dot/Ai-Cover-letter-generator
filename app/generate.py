@@ -245,6 +245,9 @@ BUSINESS INVITATION HANDLING:
   guessing. Explain that the visit is temporary and does not constitute local employment.
 - Align purpose_of_visit and the subject with a business visitor purpose when supported by the
   invitation; do not describe a documented business trip as tourism.
+- In PURPOSE OF VISIT, explicitly identify the verified inviter/host person or organisation and
+  the documented meeting, event, location and dates. Omit only the invitation details that are
+  genuinely absent from the uploaded invitation.
 - When no business invitation is attached, do not mention an invitation or business host.
 
 STAFF NOTES (use only if supplied):
@@ -260,6 +263,8 @@ STRICT RULES:
 - Omit a section when no reliable supporting fact exists; record it in the missing list instead.
 - Resolve minor spelling differences conservatively and keep names/numbers exactly as documented.
 - Write in the selected country's professional English style, first person, with short readable paragraphs.
+- Before PURPOSE OF VISIT, write exactly two developed introductory paragraphs. Combine all opening
+  evidence into those two paragraphs; do not create three or four separate opening paragraphs.
 - Match the automatically selected category's length, section depth, table complexity, and level of analysis.
 - TURKEY ONLY: regardless of the automatic category, summarise all verified evidence into a
   concise single-page cover letter. Keep the essential purpose, dates, finances, professional
@@ -324,10 +329,12 @@ JSON SCHEMA:
     ):
         pkg.setdefault(key, default)
     pkg["profile_category"] = _normalise_category(pkg.get("profile_category"))
+    pkg["destination_country"] = destination_country
     uploaded_names = {name for name, _ in files}
     if pkg.get("letterhead_document") not in uploaded_names:
         pkg["letterhead_document"] = _detect_letterhead_filename(files)
     _normalise_requested_sections(pkg)
+    _normalise_cover_opening(pkg)
     if travel_start and travel_end:
         pkg["itinerary"] = _build_itinerary(destination_city, travel_start, travel_end)
     _append_contact_details(pkg, email_address, phone_number)
@@ -518,6 +525,21 @@ def _label_value(text: str, labels: list[str]) -> str:
     return ""
 
 
+def _inviter_name(text: str) -> str:
+    """Extract a conservative inviter/host label from a documented invitation."""
+    patterns = (
+        r"(?im)^\s*(?:invited by|inviter|host company|host organisation|host organization)\s*[:\-]\s*([^\n\r]{3,100})",
+        r"(?im)^\s*(?:company|organisation|organization)\s*(?:name)?\s*[:\-]\s*([^\n\r]{3,100})",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            value = " ".join(match.group(1).split()).strip(" .,:;-")
+            if value:
+                return value
+    return ""
+
+
 def _offline_package(files, notes, country, city, travel_start="", travel_end="", email_address="", phone_number=""):
     """Safe fallback for free providers that truncate long structured replies."""
     text = _document_text(files)
@@ -560,6 +582,7 @@ def _offline_package(files, notes, country, city, travel_start="", travel_end=""
     has_business_invitation = any(term in combined_lower for term in invitation_terms) or (
         "invitation" in combined_lower and any(term in combined_lower for term in business_context_terms)
     )
+    inviter = _inviter_name(text) if has_business_invitation else ""
 
     trip = f"**{city}, {country}**"
     visit_description = "a short and temporary business visit" if has_business_invitation else "a short and temporary visit"
@@ -579,8 +602,8 @@ def _offline_package(files, notes, country, city, travel_start="", travel_end=""
             "I will restrict my activities to the authorised business-visitor purpose and will not undertake local employment."
         )
     purpose = [
-        (f"The purpose of my proposed visit to {trip} is the temporary business activity documented in the enclosed invitation. "
-         "My attendance will remain limited to the verified meeting, event or host-company engagement described in that document."
+        (f"The purpose of my proposed visit to {trip} is the temporary business activity documented in the enclosed invitation"
+         f"{' from **' + inviter + '**' if inviter else ''}. My attendance will remain limited to the verified meeting, event or host-company engagement described in that document."
          if has_business_invitation else
          f"The purpose of my proposed visit to {trip} is tourism and leisure. I wish to experience the destination's recognised public attractions, local culture and landmarks during a temporary and carefully limited stay."),
         "My activities will remain consistent with visitor status. I will not undertake unauthorised employment, enrol in a course of study, or engage in any activity that would require a different immigration authorisation.",
@@ -641,6 +664,7 @@ def _offline_package(files, notes, country, city, travel_start="", travel_end=""
     pkg = {
         "profile_category": category,
         "category_reason": category_reason,
+        "destination_country": country,
         "letterhead_document": _detect_letterhead_filename(files),
         "subject": (
             f"Application for Temporary Business Visitor Visa - {country}"
@@ -662,6 +686,7 @@ def _offline_package(files, notes, country, city, travel_start="", travel_end=""
         "generation_mode": "local_fallback",
         "document_style_seed": secrets.token_hex(8),
     }
+    _normalise_cover_opening(pkg)
     _append_contact_details(pkg, email_address, phone_number)
     _apply_verified_bank_balance(pkg, files, country)
     _apply_country_output_rules(pkg, country)
@@ -752,6 +777,27 @@ def _normalise_requested_sections(pkg: dict) -> None:
             normalised.append(section)
             seen.add(heading)
     pkg["sections"] = normalised
+
+
+def _normalise_cover_opening(pkg: dict) -> None:
+    """Keep the pre-purpose introduction detailed but limited to two paragraphs."""
+    paragraphs = [" ".join(str(value).split()) for value in pkg.get("cover_letter", []) if str(value).strip()]
+    if len(paragraphs) > 2:
+        split_at = (len(paragraphs) + 1) // 2
+        paragraphs = [" ".join(paragraphs[:split_at]), " ".join(paragraphs[split_at:])]
+    pkg["cover_letter"] = paragraphs
+
+    addressee = []
+    for value in pkg.get("addressee", []):
+        line = re.sub(r"\s*,\s*", ", ", " ".join(str(value).split())).strip()
+        if not line or line.casefold() in {"to", "to the visa officer"}:
+            continue
+        if re.fullmatch(r"(?i)(?:the\s+)?visa\s+officer", line):
+            line = "The Visa Officer"
+        addressee.append(line)
+    if not addressee or addressee[0] != "The Visa Officer":
+        addressee.insert(0, "The Visa Officer")
+    pkg["addressee"] = list(dict.fromkeys(addressee))
 
 
 def _exchange_rate(currency: str) -> float | None:

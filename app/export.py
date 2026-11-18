@@ -28,8 +28,31 @@ def _plain(value) -> str:
     return re.sub(r"(?i)^suggested tourism visit:\s*", "", text)
 
 
+def _addressee_lines(pkg: dict, defaults: list) -> list[str]:
+    lines = []
+    for value in (pkg.get("addressee") or defaults):
+        line = re.sub(r"\s*,\s*", ", ", _plain(value)).strip()
+        if not line or line.casefold() in {"to", "to the visa officer"}:
+            continue
+        if re.fullmatch(r"(?i)(?:the\s+)?visa\s+officer", line):
+            line = "The Visa Officer"
+        lines.append(line)
+    if not lines or lines[0] != "The Visa Officer":
+        lines.insert(0, "The Visa Officer")
+    return list(dict.fromkeys(lines))
+
+
 def _document_style(pkg: dict) -> dict:
     """Choose a stable professional style variant for each generated package."""
+    country = str(pkg.get("destination_country", "")).strip().casefold()
+    if country in {
+        "canada", "united states", "united states of america", "usa", "us",
+        "new zealand", "australia",
+    }:
+        return {
+            "font": "Times New Roman", "heading": "1F4E79", "table": "D9EAF7",
+            "align": WD_ALIGN_PARAGRAPH.LEFT, "line": 1.15,
+        }
     variants = (
         {"font": "Cambria", "heading": "1F4E79", "table": "D9EAF7", "align": WD_ALIGN_PARAGRAPH.LEFT, "line": 1.08},
         {"font": "Garamond", "heading": "6B4F3A", "table": "EFE4D5", "align": WD_ALIGN_PARAGRAPH.CENTER, "line": 1.12},
@@ -115,6 +138,7 @@ def package_pdf(pkg: dict, letterhead: bytes | None = None, letterhead_filename:
         nonlocal y
         if force_page and not one_page and y > top + 8:
             new_page()
+        y += 8 if one_page else 13
         heading_size = 11.5 if one_page else 15
         ensure(25 if one_page else 38)
         title = _plain(text).upper()
@@ -186,7 +210,7 @@ def package_pdf(pkg: dict, letterhead: bytes | None = None, letterhead_filename:
     new_page()
     rules = load_rules()
     short_line("To")
-    for line in (pkg.get("addressee") or rules["addressee"]):
+    for line in _addressee_lines(pkg, rules["addressee"]):
         short_line(line, after=0)
     y += 8
     short_line(f"Subject: {pkg.get('subject', '')}", bold=True, after=9)
@@ -221,8 +245,11 @@ def package_pdf(pkg: dict, letterhead: bytes | None = None, letterhead_filename:
 
     if not edited_preview and pkg.get("attached_documents"):
         heading("Attached documents supporting this application", force_page=not one_page)
-        for item in pkg["attached_documents"]:
-            paragraph(f"- {_plain(item)}", after=3, size=10)
+        if one_page:
+            paragraph("; ".join(_plain(item) for item in pkg["attached_documents"]), after=3, size=8.3)
+        else:
+            for item in pkg["attached_documents"]:
+                paragraph(f"- {_plain(item)}", after=3, size=10)
     if not edited_preview:
         for text in pkg.get("closing", []):
             paragraph(text, after=6)
@@ -256,8 +283,8 @@ def _word_heading(doc: Document, title: str, style: dict, page_break: bool = Fal
     paragraph = doc.add_paragraph()
     paragraph.paragraph_format.page_break_before = page_break
     paragraph.alignment = style["align"]
-    paragraph.paragraph_format.space_before = Pt(4)
-    paragraph.paragraph_format.space_after = Pt(4 if compact else 10)
+    paragraph.paragraph_format.space_before = Pt(7 if compact else 14)
+    paragraph.paragraph_format.space_after = Pt(5 if compact else 9)
     run = paragraph.add_run(_plain(title).upper())
     run.bold = True
     run.underline = True
@@ -274,7 +301,7 @@ def _word_body(doc: Document, paragraphs: list, line_spacing: float = 1.08, comp
         paragraph = doc.add_paragraph()
         paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         paragraph.paragraph_format.space_after = Pt(2 if compact else 5)
-        paragraph.paragraph_format.line_spacing = 1.0 if compact else line_spacing
+        paragraph.paragraph_format.line_spacing = 1.05 if compact else max(1.15, line_spacing)
         _word_runs(paragraph, value)
 
 
@@ -354,14 +381,18 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
         footer_paragraph.add_run().add_picture(
             BytesIO(bottom_band), width=section.page_width, height=Inches(LETTERHEAD_BOTTOM / 72)
         )
-    doc.add_paragraph("To")
-    for line in (pkg.get("addressee") or rules["addressee"]):
+    to_paragraph = doc.add_paragraph("To")
+    to_paragraph.paragraph_format.space_after = Pt(0)
+    for line in _addressee_lines(pkg, rules["addressee"]):
         paragraph = doc.add_paragraph(line)
         paragraph.paragraph_format.space_after = Pt(0)
     subject = doc.add_paragraph()
+    subject.paragraph_format.space_before = Pt(5)
+    subject.paragraph_format.space_after = Pt(5)
     subject.add_run("Subject: ").bold = True
     _word_runs(subject, pkg.get("subject", ""))
-    doc.add_paragraph("Dear Visa Officer,")
+    salutation = doc.add_paragraph("Dear Visa Officer,")
+    salutation.paragraph_format.space_after = Pt(5 if not one_page else 3)
     edited_preview = str(pkg.get("_edited_preview_text", "")).strip()
     if edited_preview:
         editable_paragraphs = [part.strip() for part in re.split(r"\n\s*\n", edited_preview) if part.strip()]
@@ -403,9 +434,15 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
 
     if not edited_preview and pkg.get("attached_documents"):
         _word_heading(doc, "Attached documents supporting this application", style, page_break=False, compact=one_page)
-        for item in pkg["attached_documents"]:
-            paragraph = doc.add_paragraph(style="List Bullet")
-            _word_runs(paragraph, item)
+        if one_page:
+            paragraph = doc.add_paragraph()
+            paragraph.paragraph_format.space_after = Pt(3)
+            paragraph.paragraph_format.line_spacing = 1.05
+            _word_runs(paragraph, "; ".join(str(item) for item in pkg["attached_documents"]))
+        else:
+            for item in pkg["attached_documents"]:
+                paragraph = doc.add_paragraph(style="List Bullet")
+                _word_runs(paragraph, item)
     if not edited_preview:
         _word_body(doc, pkg.get("closing", []), style["line"], one_page)
 

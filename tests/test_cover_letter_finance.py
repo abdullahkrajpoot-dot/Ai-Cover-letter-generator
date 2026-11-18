@@ -1,10 +1,10 @@
 import pymupdf
 from copy import deepcopy
 
-from app.export import package_pdf
+from app.export import _document_style, package_pdf
 from app.generate import (
     _apply_country_output_rules, _apply_verified_bank_balance,
-    _document_checklist, _extract_closing_balance,
+    _document_checklist, _extract_closing_balance, _offline_package,
 )
 
 
@@ -89,3 +89,18 @@ def test_non_turkey_package_is_not_changed():
     original = deepcopy(package)
     _apply_country_output_rules(package, "Canada")
     assert package == original
+
+
+def test_core_destinations_use_times_new_roman():
+    for country in ("Canada", "United States", "New Zealand", "Australia"):
+        assert _document_style({"destination_country": country})["font"] == "Times New Roman"
+
+
+def test_business_inviter_is_included_in_purpose_of_visit():
+    invitation = b"Business Invitation\nHost Company: Anatolia Trade Limited\nMeeting in Istanbul"
+    package = _offline_package(
+        [("business_invitation.txt", invitation)], "", "Turkey", "Istanbul"
+    )
+    assert "Anatolia Trade Limited" in package["purpose_of_visit"][0]
+    assert len(package["cover_letter"]) == 2
+    assert package["addressee"][0] == "The Visa Officer"
