@@ -161,8 +161,6 @@ st.markdown(
     [data-testid="stFileChipName"] { color:#18324f !important; font-weight:650 !important; }
     [data-testid="stFileChip"] > div:nth-child(2) > div:last-child { color:#58728b !important; }
     [data-testid="stFileChip"] > div:first-child { background:#e8f3fd !important; color:#1769c2 !important; }
-    [data-testid="stFileUploaderDropzone"]::after { content:"CNIC, Passport, Bank Statement, FRC/MRC, Job/Business Docs, Letterhead etc.";
-        color:#385774; font-size:.84rem; line-height:1.35; margin-left:18px; align-self:center; display:flex; align-items:center; }
     [data-testid="stFileUploaderDropzoneInstructions"] { display:none !important; }
     [data-testid="stFileUploaderDropzone"] small { display:none !important; }
     [data-testid="stDateInput"] { color-scheme:light !important; }
@@ -259,6 +257,7 @@ documents = st.file_uploader(
     accept_multiple_files=True,
     label_visibility="collapsed",
 )
+st.caption("CNIC, Passport, Bank Statement, FRC/MRC, Job/Business documents etc.")
 
 c1, c2 = st.columns(2)
 destination_city = c1.text_input("City / cities", placeholder="e.g. Toronto, London, Sydney or Auckland")
@@ -282,6 +281,13 @@ with st.expander("Additional details", expanded=False):
         "Other verified details",
         placeholder="Accommodation, bookings, employment/business details aur previous travel",
         height=72,
+    )
+    letterhead_file = st.file_uploader(
+        "Optional letterhead",
+        type=["pdf", "png", "jpg", "jpeg"],
+        accept_multiple_files=False,
+        key="optional_letterhead",
+        help="Upload a blank letterhead. The Word and PDF cover letter will be placed on it.",
     )
 
 travel_start = travel_dates[0] if isinstance(travel_dates, (tuple, list)) and len(travel_dates) > 0 else None
@@ -318,11 +324,17 @@ if generate:
         st.session_state.generated_destination_country = destination_country
         st.session_state.pop("letter_rating", None)
         st.session_state.pop("last_saved_rating_token", None)
-        detected_name = package.get("letterhead_document", "")
-        uploaded_map = dict(uploaded)
+        if letterhead_file is not None:
+            package["letterhead_document"] = letterhead_file.name
+            letterhead_bytes = letterhead_file.getvalue()
+            letterhead_name = letterhead_file.name
+        else:
+            package["letterhead_document"] = ""
+            letterhead_bytes = None
+            letterhead_name = ""
         st.session_state.output_settings = {
-            "letterhead": uploaded_map.get(detected_name),
-            "letterhead_filename": detected_name if detected_name in uploaded_map else "",
+            "letterhead": letterhead_bytes,
+            "letterhead_filename": letterhead_name,
         }
         st.session_state.generated_visa_type = visa_type
         progress.progress(100, text="Creating the cover letter...")
