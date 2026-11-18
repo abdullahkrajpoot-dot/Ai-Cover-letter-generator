@@ -408,6 +408,7 @@ if generate:
         st.session_state.generated_destination_country = destination_country
         st.session_state.pop("letter_rating", None)
         st.session_state.pop("last_saved_rating_token", None)
+        st.session_state.pop("edit_document_preview", None)
         if letterhead_file is not None:
             package["letterhead_document"] = letterhead_file.name
             letterhead_bytes = letterhead_file.getvalue()
@@ -486,17 +487,19 @@ if package:
                 use_container_width=True,
             )
     with preview_tab:
-        st.markdown(
-            package_preview_html(package, st.session_state.editable_preview),
-            unsafe_allow_html=True,
-        )
-        with st.expander("Edit cover letter text", expanded=False):
+        edit_document = st.toggle("Edit document", value=False, key="edit_document_preview")
+        if edit_document:
             st.text_area(
                 "Edit cover letter",
                 key="editable_preview",
-                height=420,
+                height=720,
                 label_visibility="collapsed",
                 help="Text edit karein; changes downloaded Word document mein bhi apply hongi.",
+            )
+        else:
+            st.markdown(
+                package_preview_html(package, st.session_state.editable_preview),
+                unsafe_allow_html=True,
             )
 
     st.divider()
