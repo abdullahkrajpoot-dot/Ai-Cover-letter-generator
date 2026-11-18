@@ -376,6 +376,7 @@ required_details_ready = bool(
     and travel_end
 )
 
+progress_placeholder = st.empty()
 st.write("")
 generate_left, generate_col, generate_right = st.columns([1, 3, 1])
 with generate_col:
@@ -389,7 +390,7 @@ with generate_col:
 if generate:
     try:
         uploaded = [(f.name, f.getvalue()) for f in documents]
-        progress = st.progress(20, text="Creating the cover letter...")
+        progress = progress_placeholder.progress(20, text="Creating the cover letter...")
         package = generate_from_documents(
             visa_type=visa_type,
             files=uploaded,
@@ -421,8 +422,9 @@ if generate:
         }
         st.session_state.generated_visa_type = visa_type
         progress.progress(100, text="Creating the cover letter...")
-        progress.empty()
+        progress_placeholder.empty()
     except Exception as exc:
+        progress_placeholder.empty()
         st.error(f"Cover letter generate nahi ho saka: {exc}")
 
 package = st.session_state.get("generated_package")
