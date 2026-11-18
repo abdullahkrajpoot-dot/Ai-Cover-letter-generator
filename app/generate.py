@@ -265,8 +265,9 @@ STRICT RULES:
   travel history, supporting documents, and closing.
 - Put important names, places, dates, balances, organisations and document numbers between
   **double asterisks** for bold formatting.
-- Show any closing bank balance in the destination country's currency, not PKR. State that it is
-  an approximate converted equivalent; do not invent an exact exchange rate.
+- Use the statement's explicitly labelled final closing/ending balance, not an opening balance or
+  an earlier running transaction balance. Show it in its original statement currency (normally
+  PKR) AND as an approximate destination-country currency equivalent.
 - BUSINESS / PROFESSIONAL PROFILE is mandatory when supported. For a business owner discuss
   Chamber of Commerce and NTN evidence; for an employed applicant discuss the employment letter,
   NOC and salary slips. Never claim a document that was not uploaded.
@@ -326,7 +327,8 @@ JSON SCHEMA:
     if travel_start and travel_end:
         pkg["itinerary"] = _build_itinerary(destination_city, travel_start, travel_end)
     _append_contact_details(pkg, email_address, phone_number)
-    _convert_balance_currency(pkg, destination_country)
+    pkg["attached_documents"] = _document_checklist(files)
+    _apply_verified_bank_balance(pkg, files, destination_country)
     for row in pkg.get("itinerary", []):
         row["activity"] = re.sub(
             r"(?i)^suggested tourism visit:\s*", "", str(row.get("activity", ""))
@@ -394,6 +396,110 @@ def _document_text(files: list) -> str:
     return "\n".join(chunks)
 
 
+def _extract_pdf_text(raw: bytes) -> str:
+    """Extract page text while preserving statement row order as far as possible."""
+    try:
+        with pdfplumber.open(io.BytesIO(raw)) as pdf:
+            return "\n\f\n".join(
+                page.extract_text(x_tolerance=2, y_tolerance=3, layout=False) or ""
+                for page in pdf.pages
+            )
+    except Exception:
+        return ""
+
+
+def _parse_amount(value: str) -> float | None:
+    cleaned = re.sub(r"[^0-9.\-]", "", value.replace(",", ""))
+    try:
+        amount = float(cleaned)
+    except (TypeError, ValueError):
+        return None
+    return amount if abs(amount) >= 1 else None
+
+
+def _extract_closing_balance(files: list) -> dict | None:
+    """Return the best explicitly labelled statement balance, favouring the final page."""
+    label_scores = {
+        "closing balance": 120, "closing bal": 115, "balance carried forward": 110,
+        "balance c/f": 108, "ending balance": 105, "available balance": 90,
+        "current balance": 80, "ledger balance": 70,
+    }
+    currency_pattern = r"(?:PKR|Rs\.?|USD|CAD|GBP|AUD|NZD|EUR|AED|SAR)"
+    amount_pattern = r"[-+]?\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|[-+]?\d{4,}(?:\.\d{1,2})?|[-+]?\d+\.\d{2}"
+    candidates = []
+    letterhead_name = _detect_letterhead_filename(files)
+    for filename, raw in files:
+        if filename == letterhead_name or not filename.lower().endswith((".pdf", ".txt")):
+            continue
+        text = _extract_pdf_text(raw) if filename.lower().endswith(".pdf") else raw.decode("utf-8", errors="ignore")
+        if not text:
+            continue
+        lower = text.lower()
+        bank_likelihood = sum(term in (filename + " " + lower[:5000]).lower() for term in (
+            "bank", "statement", "account number", "iban", "transactions", "debit", "credit"
+        ))
+        if bank_likelihood < 2:
+            continue
+        for label, base_score in label_scores.items():
+            escaped = re.escape(label)
+            for label_match in re.finditer(rf"(?i){escaped}", text):
+                line_end = min(
+                    [position for position in (text.find("\n", label_match.end()), text.find("\r", label_match.end())) if position >= 0]
+                    or [min(len(text), label_match.end() + 140)]
+                )
+                segment = text[label_match.start():line_end]
+                amount_matches = list(re.finditer(
+                    rf"(?i)(?P<currency>{currency_pattern})?\s*(?P<amount>{amount_pattern})\s*(?P<currency_after>{currency_pattern})?\s*(?P<suffix>CR|DR)?",
+                    segment,
+                ))
+                if not amount_matches:
+                    continue
+                # The final numeric value on a labelled summary row is the balance;
+                # earlier values on the same row are commonly an "as of" date.
+                match = amount_matches[-1]
+                amount = _parse_amount(match.group("amount"))
+                if amount is None:
+                    continue
+                if (match.group("suffix") or "").upper() == "DR":
+                    amount = -abs(amount)
+                raw_currency = (match.group("currency") or match.group("currency_after") or "PKR").upper().replace(".", "")
+                currency = "PKR" if raw_currency in {"RS", "PKR"} else raw_currency
+                candidates.append({
+                    "amount": amount, "currency": currency, "label": label.title(),
+                    "source_filename": filename, "raw": " ".join(segment.split()),
+                    "score": base_score + int(30 * label_match.start() / max(len(text), 1)) + bank_likelihood,
+                    "position": label_match.start(),
+                })
+    if not candidates:
+        return None
+    best = max(candidates, key=lambda item: (item["score"], item["position"]))
+    best.pop("score", None)
+    best.pop("position", None)
+    return best
+
+
+def _document_checklist(files: list) -> list[str]:
+    """Build a complete, non-hallucinated checklist from the actual uploads."""
+    letterhead_name = _detect_letterhead_filename(files)
+    rules = (
+        (("passport",), "Passport"), (("cnic", "nicop", "identity card", "national id"), "Identity document"),
+        (("bank", "statement", "account"), "Bank statement"), (("frc", "family registration"), "Family Registration Certificate"),
+        (("mrc", "marriage registration", "marriage certificate"), "Marriage Registration Certificate"),
+        (("invitation", "invite"), "Business invitation"),
+        (("employment", "job letter", "noc", "salary", "payslip"), "Employment evidence"),
+        (("ntn", "chamber", "business", "company", "tax"), "Business evidence"),
+        (("hotel", "accommodation", "booking"), "Accommodation booking"),
+        (("flight", "ticket", "itinerary"), "Travel booking"),
+    )
+    checklist = []
+    for filename, _ in files:
+        if filename == letterhead_name:
+            continue
+        label = next((title for terms, title in rules if any(term in filename.lower() for term in terms)), "Supporting document")
+        checklist.append(f"{label} - {filename}")
+    return list(dict.fromkeys(checklist))
+
+
 def _label_value(text: str, labels: list[str]) -> str:
     for label in labels:
         match = re.search(
@@ -425,13 +531,7 @@ def _offline_package(files, notes, country, city, travel_start="", travel_end=""
                 candidates.append(first)
         name = candidates[0].title() if candidates else "the applicant"
 
-    balance = ""
-    balance_match = re.search(
-        r"(?i)(?:closing|available|current)\s+balance[^\d]{0,30}(?:PKR|Rs\.?|USD|CAD)?\s*([\d,]+(?:\.\d{1,2})?)",
-        text,
-    )
-    if balance_match:
-        balance = balance_match.group(0).strip()
+    verified_balance = _extract_closing_balance(files)
 
     filenames = [name for name, _ in files]
     has_bank = any("bank" in n.lower() or "account" in n.lower() for n in filenames)
@@ -492,8 +592,12 @@ def _offline_package(files, notes, country, city, travel_start="", travel_end=""
         ]})
     if has_bank:
         financial = "I have enclosed my bank/account statement as the financial evidence available for this application. It allows the reviewing officer to examine the recorded account activity and the funds presented in support of the proposed visit."
-        if balance:
-            financial += f" The statement records **{balance}**."
+        if verified_balance:
+            financial += (
+                f" The verified {verified_balance['label'].lower()} in "
+                f"**{verified_balance['source_filename']}** is "
+                f"**{verified_balance['currency']} {verified_balance['amount']:,.2f}**."
+            )
         sections.append({"heading": "BANK STATEMENT AND FINANCIAL CAPACITY", "paragraphs": [
             financial,
             "The financial assessment should be based on the statement itself, including its covered period, transaction history and any balance expressly shown. No income, asset value or source of funds has been added where it is not supported by the uploaded evidence.",
@@ -543,7 +647,7 @@ def _offline_package(files, notes, country, city, travel_start="", travel_end=""
         "purpose_of_visit": purpose,
         "itinerary": _build_itinerary(city, travel_start, travel_end) if travel_start and travel_end else [],
         "sections": sections,
-        "attached_documents": filenames,
+        "attached_documents": _document_checklist(files),
         "closing": [
             "Thank you for your time and consideration. I respectfully request favourable consideration of my application.",
             "Yours faithfully,",
@@ -554,7 +658,7 @@ def _offline_package(files, notes, country, city, travel_start="", travel_end=""
         "document_style_seed": secrets.token_hex(8),
     }
     _append_contact_details(pkg, email_address, phone_number)
-    _convert_balance_currency(pkg, country)
+    _apply_verified_bank_balance(pkg, files, country)
     return pkg
 
 
@@ -653,21 +757,36 @@ def _exchange_rate(currency: str) -> float | None:
         return FALLBACK_PKR_RATES.get(currency)
 
 
-def _convert_balance_currency(pkg: dict, country: str) -> None:
-    currency = _destination_currency(country)
-    if not currency:
+def _apply_verified_bank_balance(pkg: dict, files: list, country: str) -> None:
+    """Insert one deterministic dual-currency balance sentence into the finance section."""
+    balance = _extract_closing_balance(files)
+    if not balance:
         return
-    rate = _exchange_rate(currency)
-    if not rate:
-        return
-    pattern = re.compile(r"(?i)(?:PKR|Rs\.?)\s*([\d,]+(?:\.\d{1,2})?)")
-    def convert(text):
-        def repl(match):
-            amount = float(match.group(1).replace(",", ""))
-            return f"approximately {currency} {amount * rate:,.2f} (converted equivalent)"
-        return pattern.sub(repl, str(text))
-    for section in pkg.get("sections", []):
-        section["paragraphs"] = [convert(p) for p in section.get("paragraphs", [])]
+    destination_currency = _destination_currency(country)
+    destination_text = ""
+    if balance["currency"] == "PKR" and destination_currency:
+        rate = _exchange_rate(destination_currency)
+        if rate:
+            destination_text = (
+                f"; approximately **{destination_currency} {balance['amount'] * rate:,.2f}** "
+                f"for the **{country}** application (reference conversion)"
+            )
+    sentence = (
+        f"The verified **{balance['label']}** shown in **{balance['source_filename']}** is "
+        f"**{balance['currency']} {balance['amount']:,.2f}**{destination_text}."
+    )
+    sections = pkg.setdefault("sections", [])
+    finance = next((section for section in sections if "BANK" in str(section.get("heading", "")).upper()), None)
+    if finance is None:
+        finance = {"heading": "BANK STATEMENT AND FINANCIAL CAPACITY", "paragraphs": []}
+        sections.insert(0, finance)
+    paragraphs = [
+        paragraph for paragraph in finance.get("paragraphs", [])
+        if not re.search(r"(?i)\b(?:closing|ending|available|current|ledger)\s+(?:account\s+)?balance\b", str(paragraph))
+    ]
+    paragraphs.insert(0, sentence)
+    finance["paragraphs"] = paragraphs
+    pkg["verified_bank_balance"] = balance
 
 
 def package_text(pkg: dict) -> str:

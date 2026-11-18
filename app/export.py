@@ -2,7 +2,6 @@
 import hashlib
 import json
 import re
-from copy import deepcopy
 from io import BytesIO
 
 import pymupdf
@@ -12,12 +11,16 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
+from PIL import Image
 
 from .generate import load_rules
 
 A4 = pymupdf.paper_rect("a4")
 BLACK = (0.08, 0.08, 0.08)
 ACCENT = (0.20, 0.25, 0.32)
+LETTERHEAD_TOP = 190.0
+LETTERHEAD_BOTTOM = 100.0
+LETTERHEAD_SIDE = 60.0
 
 
 def _plain(value) -> str:
@@ -76,9 +79,9 @@ def package_pdf(pkg: dict, letterhead: bytes | None = None, letterhead_filename:
     # Keep body text inside the clear writing area of full-page stationery.
     # The larger footer reserve prevents contact details and decorative artwork
     # from being covered on multi-page letters.
-    top = 200 if letterhead else 64
-    bottom = 132 if letterhead else 55
-    left = 66.0 if letterhead else 58.0
+    top = LETTERHEAD_TOP if letterhead else 64
+    bottom = LETTERHEAD_BOTTOM if letterhead else 55
+    left = LETTERHEAD_SIDE if letterhead else 58.0
     right = A4.width - left
     content_width = right - left
     page = None
@@ -288,51 +291,18 @@ def _letterhead_page_image(letterhead: bytes, filename: str) -> bytes:
     return letterhead
 
 
-def _place_picture_behind_text(inline_shape, section) -> None:
-    """Convert an inline picture to a full-page floating image behind document text."""
-    inline = inline_shape._inline
-    anchor = OxmlElement("wp:anchor")
-    for name, value in (
-        ("distT", "0"), ("distB", "0"), ("distL", "0"), ("distR", "0"),
-        ("simplePos", "0"), ("relativeHeight", "0"), ("behindDoc", "1"),
-        ("locked", "0"), ("layoutInCell", "1"), ("allowOverlap", "1"),
-    ):
-        anchor.set(name, value)
-
-    simple_pos = OxmlElement("wp:simplePos")
-    simple_pos.set("x", "0")
-    simple_pos.set("y", "0")
-    anchor.append(simple_pos)
-
-    position_h = OxmlElement("wp:positionH")
-    position_h.set("relativeFrom", "page")
-    offset_h = OxmlElement("wp:posOffset")
-    offset_h.text = "0"
-    position_h.append(offset_h)
-    anchor.append(position_h)
-
-    position_v = OxmlElement("wp:positionV")
-    position_v.set("relativeFrom", "page")
-    offset_v = OxmlElement("wp:posOffset")
-    offset_v.text = "0"
-    position_v.append(offset_v)
-    anchor.append(position_v)
-
-    extent = OxmlElement("wp:extent")
-    extent.set("cx", str(section.page_width))
-    extent.set("cy", str(section.page_height))
-    anchor.append(extent)
-    effect = OxmlElement("wp:effectExtent")
-    for edge in ("l", "t", "r", "b"):
-        effect.set(edge, "0")
-    anchor.append(effect)
-    anchor.append(OxmlElement("wp:wrapNone"))
-
-    for tag in ("wp:docPr", "wp:cNvGraphicFramePr", "a:graphic"):
-        child = inline.find(qn(tag))
-        if child is not None:
-            anchor.append(deepcopy(child))
-    inline.getparent().replace(inline, anchor)
+def _letterhead_bands(letterhead: bytes, filename: str) -> tuple[bytes, bytes]:
+    """Crop printable header/footer bands for stable repetition in Microsoft Word."""
+    page_image = _letterhead_page_image(letterhead, filename)
+    source = Image.open(BytesIO(page_image)).convert("RGB")
+    top_px = max(1, round(source.height * LETTERHEAD_TOP / A4.height))
+    bottom_px = max(1, round(source.height * LETTERHEAD_BOTTOM / A4.height))
+    top = source.crop((0, 0, source.width, top_px))
+    bottom = source.crop((0, source.height - bottom_px, source.width, source.height))
+    top_buffer, bottom_buffer = BytesIO(), BytesIO()
+    top.save(top_buffer, format="PNG")
+    bottom.save(bottom_buffer, format="PNG")
+    return top_buffer.getvalue(), bottom_buffer.getvalue()
 
 
 def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename: str = "") -> bytes:
@@ -343,11 +313,11 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
     section = doc.sections[0]
     section.page_width = Inches(8.27)
     section.page_height = Inches(11.69)
-    section.left_margin = section.right_margin = Inches(0.82)
+    section.left_margin = section.right_margin = Inches(LETTERHEAD_SIDE / 72 if letterhead else 0.82)
     # Keep body copy inside the clear writing area of a full-page letterhead.
     # The stationery itself remains behind the text and is repeated on every page.
-    section.top_margin = Inches(2.5) if letterhead else Inches(0.8)
-    section.bottom_margin = Inches(1.25) if letterhead else Inches(0.75)
+    section.top_margin = Inches(LETTERHEAD_TOP / 72) if letterhead else Inches(0.8)
+    section.bottom_margin = Inches(LETTERHEAD_BOTTOM / 72) if letterhead else Inches(0.75)
 
     normal = doc.styles["Normal"]
     normal.font.name = style["font"]
@@ -356,17 +326,27 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
     normal.paragraph_format.space_after = Pt(8)
 
     if letterhead:
-        stationery = _letterhead_page_image(letterhead, letterhead_filename)
+        top_band, bottom_band = _letterhead_bands(letterhead, letterhead_filename)
+        section.header_distance = Inches(0)
+        section.footer_distance = Inches(0)
         header = section.header
         header.is_linked_to_previous = False
-        header.distance = Inches(0)
-        paragraph = header.paragraphs[0]
-        paragraph.paragraph_format.space_before = Pt(0)
-        paragraph.paragraph_format.space_after = Pt(0)
-        shape = paragraph.add_run().add_picture(
-            BytesIO(stationery), width=section.page_width, height=section.page_height
+        header_paragraph = header.paragraphs[0]
+        header_paragraph.paragraph_format.left_indent = -section.left_margin
+        header_paragraph.paragraph_format.space_before = Pt(0)
+        header_paragraph.paragraph_format.space_after = Pt(0)
+        header_paragraph.add_run().add_picture(
+            BytesIO(top_band), width=section.page_width, height=Inches(LETTERHEAD_TOP / 72)
         )
-        _place_picture_behind_text(shape, section)
+        footer = section.footer
+        footer.is_linked_to_previous = False
+        footer_paragraph = footer.paragraphs[0]
+        footer_paragraph.paragraph_format.left_indent = -section.left_margin
+        footer_paragraph.paragraph_format.space_before = Pt(0)
+        footer_paragraph.paragraph_format.space_after = Pt(0)
+        footer_paragraph.add_run().add_picture(
+            BytesIO(bottom_band), width=section.page_width, height=Inches(LETTERHEAD_BOTTOM / 72)
+        )
     doc.add_paragraph("To")
     for line in (pkg.get("addressee") or rules["addressee"]):
         paragraph = doc.add_paragraph(line)
