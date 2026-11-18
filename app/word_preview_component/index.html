@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    html,body{margin:0;padding:0;background:transparent;font-family:"Times New Roman",Times,serif}
+    .word-preview{width:100%;min-height:900px;box-sizing:border-box;background:#fff;border:1px solid #c8d0d9;
+      box-shadow:0 8px 24px rgba(24,50,79,.12);padding:64px 74px;color:#111827;font-size:16px;line-height:1.48}
+    .word-preview p{color:#111827;margin:0 0 15px;text-align:justify}
+    .word-preview .word-address,.word-preview .word-subject{text-align:left;margin-bottom:18px}
+    .word-preview h3{color:#111827;font-size:20px;line-height:1.25;text-align:center;text-transform:uppercase;
+      text-decoration:underline;margin:27px 0 14px}
+    .word-preview ul{color:#111827;margin:0 0 16px 24px;padding:0}.word-preview li{margin:4px 0}
+    [contenteditable="true"]{outline:none}.editable-field:focus,.editable-body:focus{background:#fffdf2}
+    .editable-field:hover,.editable-body:hover{cursor:text}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    const root = document.getElementById("root");
+    let timer = null;
+    let initialised = false;
+
+    function post(type, extra={}) {
+      window.parent.postMessage({isStreamlitMessage:true,type,...extra}, "*");
+    }
+    function ready(){ post("streamlit:componentReady", {apiVersion:1}); }
+    function height(){ post("streamlit:setFrameHeight", {height:Math.max(document.body.scrollHeight+6, 930)}); }
+
+    function inlineMarkdown(node){
+      let result="";
+      node.childNodes.forEach(child=>{
+        if(child.nodeType===Node.TEXT_NODE){ result+=child.textContent; return; }
+        const tag=child.tagName;
+        if(tag==="STRONG"||tag==="B") result+="**"+inlineMarkdown(child)+"**";
+        else if(tag==="BR") result+="\n";
+        else result+=inlineMarkdown(child);
+      });
+      return result.trim();
+    }
+    function bodyMarkdown(body){
+      const blocks=[];
+      body.children.forEach(el=>{
+        const tag=el.tagName;
+        if(tag==="H3") blocks.push("**"+el.textContent.trim()+"**");
+        else if(tag==="UL"||tag==="OL") el.querySelectorAll(":scope > li").forEach(li=>blocks.push("- "+inlineMarkdown(li)));
+        else if(tag==="P"||tag==="DIV") { const text=inlineMarkdown(el); if(text) blocks.push(text); }
+      });
+      return blocks.join("\n\n");
+    }
+    function value(){
+      const address=root.querySelector(".word-address");
+      const subject=root.querySelector(".word-subject");
+      const body=root.querySelector(".editable-body");
+      const lines=(address?.innerText||"").split(/\n+/).map(x=>x.trim()).filter(Boolean).filter(x=>x.toLowerCase()!=="to");
+      return {
+        addressee:lines,
+        subject:(subject?.innerText||"").replace(/^Subject:\s*/i,"").trim(),
+        markdown:body ? bodyMarkdown(body) : ""
+      };
+    }
+    function send(){ post("streamlit:setComponentValue", {value:value()}); height(); }
+    function bind(){
+      root.querySelectorAll(".word-address,.word-subject,.editable-body").forEach(el=>{
+        el.contentEditable="true"; el.classList.add("editable-field");
+        el.addEventListener("input",()=>{clearTimeout(timer);timer=setTimeout(send,450);height();});
+        el.addEventListener("blur",send);
+      });
+    }
+    window.addEventListener("message",event=>{
+      if(event.data?.type!=="streamlit:render") return;
+      const active=document.activeElement;
+      const editing=active && root.contains(active) && active.isContentEditable;
+      if(!initialised || !editing){ root.innerHTML=event.data.args.document_html||""; bind(); initialised=true; }
+      height();
+    });
+    ready();
+  </script>
+</body>
+</html>

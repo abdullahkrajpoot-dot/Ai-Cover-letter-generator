@@ -7,6 +7,7 @@ import pycountry
 from dotenv import load_dotenv
 
 from app.export import package_docx, package_pdf
+from app.editable_preview import word_preview_editor
 from app.generate import generate_from_documents, package_text
 from app.llm import complete
 from app import library
@@ -95,8 +96,9 @@ def package_preview_html(pkg: dict, body_text: str) -> str:
         f'<p class="word-address">To<br>{address}</p>'
         f'<p class="word-subject"><strong>Subject: {_preview_inline(pkg.get("subject", ""))}</strong></p>'
         '<p>Dear Visa Officer,</p>'
+        + '<div class="editable-body">'
         + "".join(body_parts)
-        + "</div>"
+        + "</div></div>"
     )
 
 
@@ -408,7 +410,6 @@ if generate:
         st.session_state.generated_destination_country = destination_country
         st.session_state.pop("letter_rating", None)
         st.session_state.pop("last_saved_rating_token", None)
-        st.session_state.pop("edit_document_preview", None)
         if letterhead_file is not None:
             package["letterhead_document"] = letterhead_file.name
             letterhead_bytes = letterhead_file.getvalue()
@@ -487,20 +488,21 @@ if package:
                 use_container_width=True,
             )
     with preview_tab:
-        edit_document = st.toggle("Edit document", value=False, key="edit_document_preview")
-        if edit_document:
-            st.text_area(
-                "Edit cover letter",
-                key="editable_preview",
-                height=720,
-                label_visibility="collapsed",
-                help="Text edit karein; changes downloaded Word document mein bhi apply hongi.",
-            )
-        else:
-            st.markdown(
-                package_preview_html(package, st.session_state.editable_preview),
-                unsafe_allow_html=True,
-            )
+        editor_value = word_preview_editor(
+            package_preview_html(package, st.session_state.editable_preview),
+            key=f"document_preview_editor_{package.get('document_style_seed', 'current')}",
+        )
+        if isinstance(editor_value, dict):
+            edited_markdown = str(editor_value.get("markdown", "")).strip()
+            edited_subject = str(editor_value.get("subject", "")).strip()
+            edited_addressee = [str(line).strip() for line in editor_value.get("addressee", []) if str(line).strip()]
+            if edited_markdown:
+                st.session_state.editable_preview = edited_markdown
+            if edited_subject:
+                package["subject"] = edited_subject
+            if edited_addressee:
+                package["addressee"] = edited_addressee
+            st.session_state.generated_package = package
 
     st.divider()
     rating_left, rating_col, rating_right = st.columns([1.3, 1, 1.3])
