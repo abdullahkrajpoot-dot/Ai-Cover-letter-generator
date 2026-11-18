@@ -444,7 +444,7 @@ if package:
     if st.session_state.editable_preview.strip() != original_preview.strip():
         package_for_download["_edited_preview_text"] = st.session_state.editable_preview
 
-    with st.expander("AI Cover Letter Editor", expanded=True):
+    with st.expander("AI Cover Letter Editor", expanded=False):
         st.text_area(
             "What would you like to change?",
             key="revision_prompt",
