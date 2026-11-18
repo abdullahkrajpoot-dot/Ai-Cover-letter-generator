@@ -122,6 +122,10 @@ st.markdown(
         border:1px solid #a9c8e2 !important; box-shadow:none !important; }
     [data-testid="stTextInputField"] { background:#ffffff !important; color:#18324f !important;
         -webkit-text-fill-color:#18324f !important; opacity:1 !important; }
+    [data-testid="stTextInput"] input::placeholder,
+    [data-testid="stTextInputField"]::placeholder {
+        color:#8393a7 !important; -webkit-text-fill-color:#8393a7 !important;
+        opacity:1 !important; font-family:Georgia,'Times New Roman',serif !important; }
     [data-testid="stTextInputField"]:-webkit-autofill,
     [data-testid="stTextInputField"]:-webkit-autofill:hover,
     [data-testid="stTextInputField"]:-webkit-autofill:focus { -webkit-text-fill-color:#18324f !important;
