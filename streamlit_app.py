@@ -390,6 +390,17 @@ with generate_col:
     )
 
 if generate:
+    # Clear the previous result in a short first rerun so stale preview/download
+    # controls are not visible behind the new generation progress indicator.
+    st.session_state.pending_cover_letter_generation = True
+    for key in (
+        "generated_package", "editable_preview", "output_settings",
+        "generated_visa_type", "generated_destination_country",
+    ):
+        st.session_state.pop(key, None)
+    st.rerun()
+
+if st.session_state.pop("pending_cover_letter_generation", False):
     try:
         uploaded = [(f.name, f.getvalue()) for f in documents]
         progress = progress_placeholder.progress(20, text="Creating the cover letter...")
