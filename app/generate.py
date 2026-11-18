@@ -280,6 +280,9 @@ STRICT RULES:
 - BUSINESS / PROFESSIONAL PROFILE is mandatory when supported. For a business owner discuss
   Chamber of Commerce and NTN evidence; for an employed applicant discuss the employment letter,
   NOC and salary slips. Never claim a document that was not uploaded.
+- When an FBR/NTN registration document is uploaded, add a separate FBR NTN REGISTRATION section.
+  Read and state the verified taxpayer name, NTN/registration number, registration date and status
+  only when printed in that document. Do not claim tax returns or filing history unless attached.
 - Use the heading TRAVEL AND ACCOMMODATION instead of IDENTITY AND PERSONAL DOCUMENTATION.
 - Use the heading INTERNATIONAL TRAVEL HISTORY instead of IMMIGRATION COMPLIANCE.
 - When confirmed start/end dates are supplied, create one itinerary row per day using recognised
@@ -299,6 +302,7 @@ JSON SCHEMA:
   "itinerary": [{{"date":"...", "location":"...", "activity":"..."}}],
   "sections": [
     {{"heading":"BUSINESS / PROFESSIONAL PROFILE", "paragraphs":["..."]}},
+    {{"heading":"FBR NTN REGISTRATION", "paragraphs":["..."]}},
     {{"heading":"BANK STATEMENT AND FINANCIAL CAPACITY", "paragraphs":["..."]}},
     {{"heading":"TRAVEL AND ACCOMMODATION", "paragraphs":["..."]}},
     {{"heading":"FAMILY AND HOME-COUNTRY TIES", "paragraphs":["..."]}},
@@ -340,6 +344,7 @@ JSON SCHEMA:
     _append_contact_details(pkg, email_address, phone_number)
     pkg["attached_documents"] = _document_checklist(files)
     _apply_verified_bank_balance(pkg, files, destination_country)
+    _apply_ntn_section(pkg, files)
     _apply_country_output_rules(pkg, destination_country)
     for row in pkg.get("itinerary", []):
         row["activity"] = re.sub(
@@ -689,6 +694,7 @@ def _offline_package(files, notes, country, city, travel_start="", travel_end=""
     _normalise_cover_opening(pkg)
     _append_contact_details(pkg, email_address, phone_number)
     _apply_verified_bank_balance(pkg, files, country)
+    _apply_ntn_section(pkg, files)
     _apply_country_output_rules(pkg, country)
     return pkg
 
@@ -841,6 +847,52 @@ def _apply_verified_bank_balance(pkg: dict, files: list, country: str) -> None:
     pkg["verified_bank_balance"] = balance
 
 
+def _apply_ntn_section(pkg: dict, files: list) -> None:
+    """Add a standalone verified FBR/NTN section when NTN evidence is uploaded."""
+    ntn_files = []
+    text_parts = []
+    for filename, raw in files:
+        file_text = ""
+        if filename.lower().endswith(".pdf"):
+            file_text = _extract_pdf_text(raw)
+        elif filename.lower().endswith(".txt"):
+            file_text = raw.decode("utf-8", errors="ignore")
+        evidence = f"{filename}\n{file_text}"
+        if re.search(r"(?i)\b(?:ntn|national\s+tax\s+number|federal\s+board\s+of\s+revenue|fbr)\b", evidence):
+            ntn_files.append(filename)
+            text_parts.append(file_text)
+    if not ntn_files:
+        return
+
+    text = "\n".join(text_parts)
+    number_match = re.search(
+        r"(?i)(?:national\s+tax\s+number|registration\s*(?:no\.?|number)|\bntn\b)\s*[:#\-]?\s*([0-9]{7}(?:-[0-9])?|[0-9]{8,10})",
+        text,
+    )
+    taxpayer = _label_value(text, ["taxpayer name", "business name", "name"])
+    verified = []
+    if taxpayer:
+        verified.append(f"registered taxpayer name **{taxpayer}**")
+    if number_match:
+        verified.append(f"National Tax Number **{number_match.group(1)}**")
+    sources = ", ".join(f"**{name}**" for name in ntn_files)
+    if verified:
+        first = f"The uploaded FBR/NTN evidence ({sources}) records the " + " and ".join(verified) + "."
+    else:
+        first = f"I have enclosed the uploaded FBR/NTN registration evidence ({sources}) for verification of my documented tax registration."
+    paragraphs = [
+        first,
+        "This registration supports my documented professional and economic circumstances in Pakistan. Any tax-return or filing-history assessment should rely only on tax records separately attached to this application.",
+    ]
+    sections = pkg.setdefault("sections", [])
+    existing = next((item for item in sections if str(item.get("heading", "")).upper() == "FBR NTN REGISTRATION"), None)
+    if existing:
+        existing["paragraphs"] = paragraphs
+    else:
+        profile_index = next((index for index, item in enumerate(sections) if "PROFESSIONAL PROFILE" in str(item.get("heading", "")).upper()), -1)
+        sections.insert(profile_index + 1, {"heading": "FBR NTN REGISTRATION", "paragraphs": paragraphs})
+
+
 def _shorten_text(value: str, limit: int) -> str:
     """Keep complete opening sentences within a compact evidence-led limit."""
     clean = " ".join(str(value or "").split())
@@ -873,7 +925,7 @@ def _apply_country_output_rules(pkg: dict, country: str) -> None:
     ] if pkg.get("purpose_of_visit") else []
     compact_sections = []
     preferred = (
-        "BUSINESS / PROFESSIONAL PROFILE", "BANK STATEMENT AND FINANCIAL CAPACITY",
+        "BUSINESS / PROFESSIONAL PROFILE", "FBR NTN REGISTRATION", "BANK STATEMENT AND FINANCIAL CAPACITY",
         "TRAVEL AND ACCOMMODATION", "FAMILY AND HOME-COUNTRY TIES",
         "INTERNATIONAL TRAVEL HISTORY",
     )

@@ -1,5 +1,6 @@
 """Modern Streamlit UI for document-led visa cover letter generation."""
 from pathlib import Path
+import html
 import re
 import streamlit as st
 import pycountry
@@ -48,6 +49,55 @@ def package_preview_markdown(pkg: dict) -> str:
 
     parts.extend(str(text).strip() for text in pkg.get("closing", []) if str(text).strip())
     return "\n\n".join(parts)
+
+
+def _preview_inline(value: str) -> str:
+    """Escape user/document text while retaining the app's **bold** markers."""
+    chunks = str(value or "").split("**")
+    return "".join(
+        f"<strong>{html.escape(chunk)}</strong>" if index % 2 else html.escape(chunk)
+        for index, chunk in enumerate(chunks)
+    )
+
+
+def package_preview_html(pkg: dict, body_text: str) -> str:
+    """Render a selectable Word-like page preview from the current editable body."""
+    lines = []
+    for line in pkg.get("addressee", []) or ["The Visa Officer"]:
+        clean = re.sub(r"\s*,\s*", ", ", str(line).strip())
+        if clean and clean.casefold() not in {"to", "to the visa officer"}:
+            lines.append(clean)
+    if not lines or lines[0].casefold() != "the visa officer":
+        lines.insert(0, "The Visa Officer")
+    address = "<br>".join(html.escape(line) for line in dict.fromkeys(lines))
+
+    body_parts = []
+    list_items = []
+    for block in (part.strip() for part in re.split(r"\n\s*\n", body_text or "")):
+        if not block:
+            continue
+        if block.startswith("- "):
+            list_items.append(f"<li>{_preview_inline(block[2:])}</li>")
+            continue
+        if list_items:
+            body_parts.append("<ul>" + "".join(list_items) + "</ul>")
+            list_items = []
+        heading = re.fullmatch(r"\*\*([^*]+)\*\*", block)
+        if heading:
+            body_parts.append(f"<h3>{html.escape(heading.group(1))}</h3>")
+        else:
+            body_parts.append(f"<p>{_preview_inline(block).replace(chr(10), '<br>')}</p>")
+    if list_items:
+        body_parts.append("<ul>" + "".join(list_items) + "</ul>")
+
+    return (
+        '<div class="word-preview">'
+        f'<p class="word-address">To<br>{address}</p>'
+        f'<p class="word-subject"><strong>Subject: {_preview_inline(pkg.get("subject", ""))}</strong></p>'
+        '<p>Dear Visa Officer,</p>'
+        + "".join(body_parts)
+        + "</div>"
+    )
 
 
 def apply_prompt_revision() -> None:
@@ -196,6 +246,11 @@ st.markdown(
     [data-testid="stDateInput"] input::-webkit-datetime-edit-month-field,
     [data-testid="stDateInput"] input::-webkit-datetime-edit-day-field { color:#55738f !important; -webkit-text-fill-color:#55738f !important; }
     [data-testid="stDateInput"] svg { fill:#526a82 !important; }
+    .st-key-destination_country [data-baseweb="select"] { position:relative; }
+    .st-key-destination_country [data-baseweb="select"]::before {
+        content:"\\1F50D"; position:absolute; left:13px; top:50%; transform:translateY(-50%);
+        z-index:3; font-size:15px; line-height:1; pointer-events:none; }
+    .st-key-destination_country [data-baseweb="select"] > div { padding-left:34px !important; }
     .section-label, [data-testid="stWidgetLabel"] p { text-transform:uppercase; letter-spacing:.025em; }
     div[data-testid="stExpander"] { background:linear-gradient(180deg,#ffffff,#f7fbff); border:1px solid #bdd7eb; border-radius:12px;
         box-shadow:0 6px 16px rgba(40,88,132,.07); }
@@ -237,6 +292,18 @@ st.markdown(
     .rating-thanks { color:#6f86a0; font-size:1rem; margin-top:7px; }
     hr { border-color:#2b3a50 !important; }
     div[data-testid="stTextArea"] textarea { font-family:Georgia,'Times New Roman',serif; line-height:1.55; }
+    .word-preview { width:100%; min-height:900px; box-sizing:border-box; background:#ffffff;
+        border:1px solid #c8d0d9; box-shadow:0 8px 24px rgba(24,50,79,.12); padding:64px 74px;
+        color:#111827 !important; font-family:'Times New Roman',Times,serif; font-size:16px;
+        line-height:1.48; }
+    .word-preview p { color:#111827 !important; margin:0 0 15px; text-align:justify; }
+    .word-preview .word-address { text-align:left; margin-bottom:18px; }
+    .word-preview .word-subject { text-align:left; margin-bottom:18px; }
+    .word-preview h3 { color:#111827 !important; font-family:'Times New Roman',Times,serif;
+        font-size:20px; line-height:1.25; text-align:center; text-transform:uppercase;
+        text-decoration:underline; margin:27px 0 14px; }
+    .word-preview ul { color:#111827; margin:0 0 16px 24px; padding:0; }
+    .word-preview li { margin:4px 0; }
     @media(max-width:760px) {
         .block-container { padding:1rem; }
     }
@@ -272,8 +339,9 @@ destination_city = c1.text_input("City / cities", placeholder="e.g. Toronto, Lon
 destination_country = c2.selectbox(
     "Destination country",
     COUNTRY_NAMES,
-    index=COUNTRY_NAMES.index("Canada"),
+    index=None,
     placeholder="Type to search any country",
+    key="destination_country",
 )
 visa_type = "visit"
 travel_dates = st.date_input(
@@ -300,6 +368,13 @@ with st.expander("Additional details", expanded=False):
 
 travel_start = travel_dates[0] if isinstance(travel_dates, (tuple, list)) and len(travel_dates) > 0 else None
 travel_end = travel_dates[1] if isinstance(travel_dates, (tuple, list)) and len(travel_dates) > 1 else None
+required_details_ready = bool(
+    documents
+    and destination_country
+    and destination_city.strip()
+    and travel_start
+    and travel_end
+)
 
 st.write("")
 generate_left, generate_col, generate_right = st.columns([1, 3, 1])
@@ -308,7 +383,7 @@ with generate_col:
         "Generate Cover Letter",
         type="primary",
         use_container_width=True,
-        disabled=not documents,
+        disabled=not required_details_ready,
     )
 
 if generate:
@@ -409,12 +484,18 @@ if package:
                 use_container_width=True,
             )
     with preview_tab:
-        st.text_area(
-            "Edit cover letter",
-            key="editable_preview",
-            height=620,
-            help="Text edit karein; changes downloaded Word document mein bhi apply hongi.",
+        st.markdown(
+            package_preview_html(package, st.session_state.editable_preview),
+            unsafe_allow_html=True,
         )
+        with st.expander("Edit cover letter text", expanded=False):
+            st.text_area(
+                "Edit cover letter",
+                key="editable_preview",
+                height=420,
+                label_visibility="collapsed",
+                help="Text edit karein; changes downloaded Word document mein bhi apply hongi.",
+            )
 
     st.divider()
     rating_left, rating_col, rating_right = st.columns([1.3, 1, 1.3])

@@ -396,7 +396,11 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
     edited_preview = str(pkg.get("_edited_preview_text", "")).strip()
     if edited_preview:
         editable_paragraphs = [part.strip() for part in re.split(r"\n\s*\n", edited_preview) if part.strip()]
-        _word_body(doc, editable_paragraphs, style["line"], one_page)
+        for block in editable_paragraphs:
+            if re.fullmatch(r"\*\*[^*]+\*\*", block):
+                _word_heading(doc, block, style, page_break=False, compact=one_page)
+            else:
+                _word_body(doc, [block], style["line"], one_page)
     else:
         _word_body(doc, pkg.get("cover_letter", []), style["line"], one_page)
 

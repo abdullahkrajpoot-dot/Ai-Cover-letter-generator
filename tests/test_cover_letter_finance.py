@@ -3,7 +3,7 @@ from copy import deepcopy
 
 from app.export import _document_style, package_pdf
 from app.generate import (
-    _apply_country_output_rules, _apply_verified_bank_balance,
+    _apply_country_output_rules, _apply_ntn_section, _apply_verified_bank_balance,
     _document_checklist, _extract_closing_balance, _offline_package,
 )
 
@@ -104,3 +104,13 @@ def test_business_inviter_is_included_in_purpose_of_visit():
     assert "Anatolia Trade Limited" in package["purpose_of_visit"][0]
     assert len(package["cover_letter"]) == 2
     assert package["addressee"][0] == "The Visa Officer"
+
+
+def test_ntn_upload_adds_verified_fbr_section():
+    package = {"sections": []}
+    raw = b"Federal Board of Revenue\nTaxpayer Name: ALI RAZA\nNational Tax Number: 2107400-3"
+    _apply_ntn_section(package, [("FBR_NTN_Registration.txt", raw)])
+    section = package["sections"][0]
+    assert section["heading"] == "FBR NTN REGISTRATION"
+    assert "2107400-3" in section["paragraphs"][0]
+    assert "Ali Raza" in section["paragraphs"][0]
