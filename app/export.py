@@ -63,6 +63,7 @@ def package_pdf(pkg: dict, letterhead: bytes | None = None, letterhead_filename:
     stationery_pdf = None
     stationery_image = None
     full_page_stationery_image = False
+    one_page = bool(pkg.get("force_one_page"))
     if letterhead:
         if letterhead_filename.lower().endswith(".pdf") or letterhead[:4] == b"%PDF":
             stationery_pdf = pymupdf.open(stream=letterhead, filetype="pdf")
@@ -112,18 +113,21 @@ def package_pdf(pkg: dict, letterhead: bytes | None = None, letterhead_filename:
 
     def heading(text: str, force_page: bool = False):
         nonlocal y
-        if force_page and y > top + 8:
+        if force_page and not one_page and y > top + 8:
             new_page()
-        ensure(38)
+        heading_size = 11.5 if one_page else 15
+        ensure(25 if one_page else 38)
         title = _plain(text).upper()
-        title_width = min(pymupdf.get_text_length(title, fontname="Times-Bold", fontsize=15), content_width)
+        title_width = min(pymupdf.get_text_length(title, fontname="Times-Bold", fontsize=heading_size), content_width)
         line_left = (A4.width - title_width) / 2
-        page.insert_text((line_left, y + 16), title, fontname="Times-Bold", fontsize=15, color=ACCENT)
-        page.draw_line((line_left, y + 20), (line_left + title_width, y + 20), color=ACCENT, width=0.8)
-        y += 34
+        page.insert_text((line_left, y + heading_size), title, fontname="Times-Bold", fontsize=heading_size, color=ACCENT)
+        page.draw_line((line_left, y + heading_size + 3), (line_left + title_width, y + heading_size + 3), color=ACCENT, width=0.8)
+        y += 22 if one_page else 34
 
     def paragraph(text: str, after: float = 10, size: float = 10.5):
         nonlocal y
+        if one_page and size >= 10:
+            size, after = 8.6, min(after, 4)
         clean = _plain(text)
         if not clean:
             y += after
@@ -141,9 +145,11 @@ def package_pdf(pkg: dict, letterhead: bytes | None = None, letterhead_filename:
     def short_line(text: str, bold: bool = False, after: float = 3):
         nonlocal y
         font = "Times-Bold" if bold else "Times-Roman"
-        ensure(17 + after)
-        page.insert_text((left, y + 11), _plain(text), fontname=font, fontsize=10.5, color=BLACK)
-        y += 17 + after
+        line_size = 9 if one_page else 10.5
+        line_height = 13 if one_page else 17
+        ensure(line_height + after)
+        page.insert_text((left, y + line_size + 1), _plain(text), fontname=font, fontsize=line_size, color=BLACK)
+        y += line_height + after
 
     def itinerary_table(rows: list[dict]):
         nonlocal y
@@ -199,22 +205,22 @@ def package_pdf(pkg: dict, letterhead: bytes | None = None, letterhead_filename:
             paragraph(text)
 
     if not edited_preview and pkg.get("purpose_of_visit"):
-        heading("Purpose of visit", force_page=True)
+        heading("Purpose of visit", force_page=not one_page)
         for text in pkg["purpose_of_visit"]:
             paragraph(text)
 
     if not edited_preview and pkg.get("itinerary"):
-        heading("Travel itinerary", force_page=True)
+        heading("Travel itinerary", force_page=not one_page)
         itinerary_table(pkg["itinerary"])
 
     for index, section in enumerate(pkg.get("sections", []) if not edited_preview else []):
         # Start major supporting material cleanly, then allow related short sections to share a page.
-        heading(section.get("heading", "Supporting information"), force_page=index == 0 or y > A4.height * 0.62)
+        heading(section.get("heading", "Supporting information"), force_page=not one_page and (index == 0 or y > A4.height * 0.62))
         for text in section.get("paragraphs", []):
             paragraph(text)
 
     if not edited_preview and pkg.get("attached_documents"):
-        heading("Attached documents supporting this application", force_page=True)
+        heading("Attached documents supporting this application", force_page=not one_page)
         for item in pkg["attached_documents"]:
             paragraph(f"- {_plain(item)}", after=3, size=10)
     if not edited_preview:
@@ -246,29 +252,29 @@ def _word_runs(paragraph, value) -> None:
             run.bold = index % 2 == 1
 
 
-def _word_heading(doc: Document, title: str, style: dict, page_break: bool = False) -> None:
+def _word_heading(doc: Document, title: str, style: dict, page_break: bool = False, compact: bool = False) -> None:
     paragraph = doc.add_paragraph()
     paragraph.paragraph_format.page_break_before = page_break
     paragraph.alignment = style["align"]
     paragraph.paragraph_format.space_before = Pt(4)
-    paragraph.paragraph_format.space_after = Pt(10)
+    paragraph.paragraph_format.space_after = Pt(4 if compact else 10)
     run = paragraph.add_run(_plain(title).upper())
     run.bold = True
     run.underline = True
     run.font.name = style["font"]
-    run.font.size = Pt(15)
+    run.font.size = Pt(11.5 if compact else 15)
     run.font.color.rgb = RGBColor.from_string(style["heading"])
     paragraph.paragraph_format.keep_with_next = True
 
 
-def _word_body(doc: Document, paragraphs: list, line_spacing: float = 1.08) -> None:
+def _word_body(doc: Document, paragraphs: list, line_spacing: float = 1.08, compact: bool = False) -> None:
     for value in paragraphs:
         if not _plain(value):
             continue
         paragraph = doc.add_paragraph()
         paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        paragraph.paragraph_format.space_after = Pt(5)
-        paragraph.paragraph_format.line_spacing = line_spacing
+        paragraph.paragraph_format.space_after = Pt(2 if compact else 5)
+        paragraph.paragraph_format.line_spacing = 1.0 if compact else line_spacing
         _word_runs(paragraph, value)
 
 
@@ -309,6 +315,7 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
     """Create an editable Word version using the same professional section hierarchy."""
     rules = load_rules()
     style = _document_style(pkg)
+    one_page = bool(pkg.get("force_one_page"))
     doc = Document()
     section = doc.sections[0]
     section.page_width = Inches(8.27)
@@ -321,9 +328,9 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
 
     normal = doc.styles["Normal"]
     normal.font.name = style["font"]
-    normal.font.size = Pt(10.5)
+    normal.font.size = Pt(8.6 if one_page else 10.5)
     normal.font.color.rgb = RGBColor(0, 0, 0)
-    normal.paragraph_format.space_after = Pt(8)
+    normal.paragraph_format.space_after = Pt(3 if one_page else 8)
 
     if letterhead:
         top_band, bottom_band = _letterhead_bands(letterhead, letterhead_filename)
@@ -358,16 +365,16 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
     edited_preview = str(pkg.get("_edited_preview_text", "")).strip()
     if edited_preview:
         editable_paragraphs = [part.strip() for part in re.split(r"\n\s*\n", edited_preview) if part.strip()]
-        _word_body(doc, editable_paragraphs, style["line"])
+        _word_body(doc, editable_paragraphs, style["line"], one_page)
     else:
-        _word_body(doc, pkg.get("cover_letter", []), style["line"])
+        _word_body(doc, pkg.get("cover_letter", []), style["line"], one_page)
 
     if not edited_preview and pkg.get("purpose_of_visit"):
-        _word_heading(doc, "Purpose of visit", style, page_break=False)
-        _word_body(doc, pkg["purpose_of_visit"], style["line"])
+        _word_heading(doc, "Purpose of visit", style, page_break=False, compact=one_page)
+        _word_body(doc, pkg["purpose_of_visit"], style["line"], one_page)
 
     if not edited_preview and pkg.get("itinerary"):
-        _word_heading(doc, "Travel itinerary", style, page_break=False)
+        _word_heading(doc, "Travel itinerary", style, page_break=False, compact=one_page)
         table = doc.add_table(rows=1, cols=3)
         table.autofit = False
         table.style = "Table Grid"
@@ -391,16 +398,16 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
                 _word_runs(paragraph, value)
 
     for index, supporting in enumerate(pkg.get("sections", []) if not edited_preview else []):
-        _word_heading(doc, supporting.get("heading", "Supporting information"), style, page_break=False)
-        _word_body(doc, supporting.get("paragraphs", []), style["line"])
+        _word_heading(doc, supporting.get("heading", "Supporting information"), style, page_break=False, compact=one_page)
+        _word_body(doc, supporting.get("paragraphs", []), style["line"], one_page)
 
     if not edited_preview and pkg.get("attached_documents"):
-        _word_heading(doc, "Attached documents supporting this application", style, page_break=False)
+        _word_heading(doc, "Attached documents supporting this application", style, page_break=False, compact=one_page)
         for item in pkg["attached_documents"]:
             paragraph = doc.add_paragraph(style="List Bullet")
             _word_runs(paragraph, item)
     if not edited_preview:
-        _word_body(doc, pkg.get("closing", []), style["line"])
+        _word_body(doc, pkg.get("closing", []), style["line"], one_page)
 
     buffer = BytesIO()
     doc.save(buffer)

@@ -1,6 +1,11 @@
 import pymupdf
+from copy import deepcopy
 
-from app.generate import _document_checklist, _extract_closing_balance, _apply_verified_bank_balance
+from app.export import package_pdf
+from app.generate import (
+    _apply_country_output_rules, _apply_verified_bank_balance,
+    _document_checklist, _extract_closing_balance,
+)
 
 
 def _statement_pdf() -> bytes:
@@ -44,3 +49,43 @@ def test_checklist_uses_actual_files_and_excludes_letterhead():
         "Bank statement - client_bank_statement.pdf",
         "Business invitation - business_invitation.pdf",
     ]
+
+
+def _long_package():
+    return {
+        "subject": "Application for a Visitor Visa to Turkey",
+        "addressee": ["The Visa Officer", "Embassy of Turkey"],
+        "cover_letter": [("This paragraph explains the verified application evidence in detail. " * 20)] * 4,
+        "purpose_of_visit": [("The purpose is a temporary tourism visit supported by the documents. " * 15)],
+        "itinerary": [{"date": "1 January 2027", "location": "Istanbul", "activity": "Sightseeing"}],
+        "sections": [
+            {"heading": heading, "paragraphs": [("Verified supporting evidence is enclosed for review. " * 15)]}
+            for heading in (
+                "BUSINESS / PROFESSIONAL PROFILE", "BANK STATEMENT AND FINANCIAL CAPACITY",
+                "TRAVEL AND ACCOMMODATION", "FAMILY AND HOME-COUNTRY TIES",
+                "INTERNATIONAL TRAVEL HISTORY",
+            )
+        ],
+        "attached_documents": [f"Supporting document - file-{index}.pdf" for index in range(15)],
+        "closing": ["Thank you for your consideration.", "Yours faithfully,", "Applicant Name"],
+    }
+
+
+def test_turkey_is_compacted_to_one_pdf_page_only():
+    package = _long_package()
+    _apply_country_output_rules(package, "Turkey")
+    assert package["force_one_page"] is True
+    assert package["itinerary"] == []
+    assert len(package["attached_documents"]) == 10
+    rendered = pymupdf.open(stream=package_pdf(package), filetype="pdf")
+    try:
+        assert len(rendered) == 1
+    finally:
+        rendered.close()
+
+
+def test_non_turkey_package_is_not_changed():
+    package = _long_package()
+    original = deepcopy(package)
+    _apply_country_output_rules(package, "Canada")
+    assert package == original

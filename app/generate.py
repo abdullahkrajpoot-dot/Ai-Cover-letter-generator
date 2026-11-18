@@ -180,6 +180,7 @@ def generate_from_documents(
         "United Kingdom": "British English; address UK Visas and Immigration / the Entry Clearance Officer",
         "Australia": "Australian English; address the Australian visa decision maker",
         "New Zealand": "New Zealand English; address Immigration New Zealand / the Visa Officer",
+        "Turkey": "concise formal English; address the responsible Turkish embassy or consulate and keep the complete letter to one page",
     }.get(
         destination_country,
         f"professional international English appropriate for {destination_country}; address the relevant visa officer, embassy, consulate, or immigration authority",
@@ -260,6 +261,9 @@ STRICT RULES:
 - Resolve minor spelling differences conservatively and keep names/numbers exactly as documented.
 - Write in the selected country's professional English style, first person, with short readable paragraphs.
 - Match the automatically selected category's length, section depth, table complexity, and level of analysis.
+- TURKEY ONLY: regardless of the automatic category, summarise all verified evidence into a
+  concise single-page cover letter. Keep the essential purpose, dates, finances, professional
+  profile, home ties and attached-document checklist, but do not create extra pages.
 - Structure and detail should resemble an embassy submission: cover letter, purpose,
   itinerary, professional profile, finances, accommodation, family/home ties, compliance,
   travel history, supporting documents, and closing.
@@ -329,6 +333,7 @@ JSON SCHEMA:
     _append_contact_details(pkg, email_address, phone_number)
     pkg["attached_documents"] = _document_checklist(files)
     _apply_verified_bank_balance(pkg, files, destination_country)
+    _apply_country_output_rules(pkg, destination_country)
     for row in pkg.get("itinerary", []):
         row["activity"] = re.sub(
             r"(?i)^suggested tourism visit:\s*", "", str(row.get("activity", ""))
@@ -659,6 +664,7 @@ def _offline_package(files, notes, country, city, travel_start="", travel_end=""
     }
     _append_contact_details(pkg, email_address, phone_number)
     _apply_verified_bank_balance(pkg, files, country)
+    _apply_country_output_rules(pkg, country)
     return pkg
 
 
@@ -787,6 +793,59 @@ def _apply_verified_bank_balance(pkg: dict, files: list, country: str) -> None:
     paragraphs.insert(0, sentence)
     finance["paragraphs"] = paragraphs
     pkg["verified_bank_balance"] = balance
+
+
+def _shorten_text(value: str, limit: int) -> str:
+    """Keep complete opening sentences within a compact evidence-led limit."""
+    clean = " ".join(str(value or "").split())
+    if len(clean) <= limit:
+        return clean
+    sentences = re.split(r"(?<=[.!?])\s+", clean)
+    chosen = ""
+    for sentence in sentences:
+        candidate = f"{chosen} {sentence}".strip()
+        if chosen and len(candidate) > limit:
+            break
+        chosen = candidate
+    if chosen and len(chosen) <= limit:
+        return chosen
+    return clean[:limit].rsplit(" ", 1)[0].rstrip(" ,;:") + "."
+
+
+def _apply_country_output_rules(pkg: dict, country: str) -> None:
+    """Turkey applications are always condensed to a single-page package."""
+    if (country or "").strip().casefold() not in {"turkey", "türkiye", "turkiye"}:
+        return
+    pkg["force_one_page"] = True
+    pkg["profile_category"] = "Standard Category (Short: 1-2 Pages)"
+    pkg["category_reason"] = "Turkey-specific single-page cover-letter format."
+    pkg["cover_letter"] = [
+        _shorten_text(value, 330) for value in pkg.get("cover_letter", [])[:2] if str(value).strip()
+    ]
+    pkg["purpose_of_visit"] = [
+        _shorten_text(pkg.get("purpose_of_visit", [""])[0], 280)
+    ] if pkg.get("purpose_of_visit") else []
+    compact_sections = []
+    preferred = (
+        "BUSINESS / PROFESSIONAL PROFILE", "BANK STATEMENT AND FINANCIAL CAPACITY",
+        "TRAVEL AND ACCOMMODATION", "FAMILY AND HOME-COUNTRY TIES",
+        "INTERNATIONAL TRAVEL HISTORY",
+    )
+    section_map = {str(item.get("heading", "")).upper(): item for item in pkg.get("sections", [])}
+    for heading in preferred:
+        section = section_map.get(heading)
+        if not section or not section.get("paragraphs"):
+            continue
+        compact_sections.append({
+            "heading": heading,
+            "paragraphs": [_shorten_text(section["paragraphs"][0], 260)],
+        })
+    pkg["sections"] = compact_sections
+    pkg["itinerary"] = []
+    pkg["attached_documents"] = pkg.get("attached_documents", [])[:10]
+    pkg["closing"] = [
+        _shorten_text(value, 180) for value in pkg.get("closing", []) if str(value).strip()
+    ][:3]
 
 
 def package_text(pkg: dict) -> str:
