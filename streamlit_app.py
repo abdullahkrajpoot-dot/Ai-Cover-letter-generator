@@ -1,5 +1,7 @@
 """Modern Streamlit UI for document-led visa cover letter generation."""
 from pathlib import Path
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import html
 import re
 import streamlit as st
@@ -346,10 +348,14 @@ destination_country = c2.selectbox(
     key="destination_country",
 )
 visa_type = "visit"
+today_pk = datetime.now(ZoneInfo("Asia/Karachi")).date()
 travel_dates = st.date_input(
     "Travel dates",
     value=(),
-    help="Start date aur end date isi field mein select karein.",
+    min_value=today_pk,
+    max_value=today_pk + timedelta(days=365 * 5),
+    help="Calendar arrows se next month open karein. Past dates disabled hain; start aur end date isi field mein select karein.",
+    key="travel_dates",
 )
 with st.expander("Additional details", expanded=False):
     contact_c1, contact_c2 = st.columns(2)
