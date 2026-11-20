@@ -97,7 +97,7 @@ def package_preview_html(pkg: dict, body_text: str) -> str:
         '<div class="word-preview">'
         f'<p class="word-address">To<br>{address}</p>'
         f'<p class="word-subject"><strong>Subject: {_preview_inline(pkg.get("subject", ""))}</strong></p>'
-        '<p>Dear Visa Officer,</p>'
+        f'<p class="word-salutation">{_preview_inline(pkg.get("salutation", "Dear Visa Officer,"))}</p>'
         + '<div class="editable-body">'
         + "".join(body_parts)
         + "</div></div>"
@@ -484,7 +484,7 @@ if package:
         if st.session_state.get("revision_error"):
             st.error(st.session_state.revision_error)
 
-    download_tab, preview_tab = st.tabs(["Download", "Document preview"])
+    preview_tab, download_tab = st.tabs(["Document preview", "Download"])
     with download_tab:
         st.markdown("#### Your document is ready")
         word_col, pdf_col = st.columns(2)
@@ -512,11 +512,14 @@ if package:
         if isinstance(editor_value, dict):
             edited_markdown = str(editor_value.get("markdown", "")).strip()
             edited_subject = str(editor_value.get("subject", "")).strip()
+            edited_salutation = str(editor_value.get("salutation", "")).strip()
             edited_addressee = [str(line).strip() for line in editor_value.get("addressee", []) if str(line).strip()]
             if edited_markdown:
                 st.session_state.editable_preview = edited_markdown
             if edited_subject:
                 package["subject"] = edited_subject
+            if edited_salutation:
+                package["salutation"] = edited_salutation
             if edited_addressee:
                 package["addressee"] = edited_addressee
             st.session_state.generated_package = package

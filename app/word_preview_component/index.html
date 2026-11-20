@@ -7,7 +7,7 @@
     .word-preview{width:100%;min-height:900px;box-sizing:border-box;background:#fff;border:1px solid #c8d0d9;
       box-shadow:0 8px 24px rgba(24,50,79,.12);padding:64px 74px;color:#111827;font-size:16px;line-height:1.48}
     .word-preview p{color:#111827;margin:0 0 15px;text-align:justify}
-    .word-preview .word-address,.word-preview .word-subject{text-align:left;margin-bottom:18px}
+    .word-preview .word-address,.word-preview .word-subject,.word-preview .word-salutation{text-align:left;margin-bottom:18px}
     .word-preview h3{color:#111827;font-size:20px;line-height:1.25;text-align:center;text-transform:uppercase;
       text-decoration:underline;margin:27px 0 14px}
     .word-preview ul{color:#111827;margin:0 0 16px 24px;padding:0}.word-preview li{margin:4px 0}
@@ -52,17 +52,19 @@
     function value(){
       const address=root.querySelector(".word-address");
       const subject=root.querySelector(".word-subject");
+      const salutation=root.querySelector(".word-salutation");
       const body=root.querySelector(".editable-body");
       const lines=(address?.innerText||"").split(/\n+/).map(x=>x.trim()).filter(Boolean).filter(x=>x.toLowerCase()!=="to");
       return {
         addressee:lines,
         subject:(subject?.innerText||"").replace(/^Subject:\s*/i,"").trim(),
+        salutation:(salutation?.innerText||"").trim(),
         markdown:body ? bodyMarkdown(body) : ""
       };
     }
     function send(){ post("streamlit:setComponentValue", {value:value()}); height(); }
     function bind(){
-      root.querySelectorAll(".word-address,.word-subject,.editable-body").forEach(el=>{
+      root.querySelectorAll(".word-address,.word-subject,.word-salutation,.editable-body").forEach(el=>{
         el.contentEditable="true"; el.classList.add("editable-field");
         el.addEventListener("input",()=>{clearTimeout(timer);timer=setTimeout(send,450);height();});
         el.addEventListener("blur",send);

@@ -214,7 +214,7 @@ def package_pdf(pkg: dict, letterhead: bytes | None = None, letterhead_filename:
         short_line(line, after=0)
     y += 8
     short_line(f"Subject: {pkg.get('subject', '')}", bold=True, after=9)
-    short_line("Dear Visa Officer,", after=8)
+    short_line(pkg.get("salutation") or "Dear Visa Officer,", after=8)
     edited_preview = str(pkg.get("_edited_preview_text", "")).strip()
     if edited_preview:
         for block in (part.strip() for part in re.split(r"\n\s*\n", edited_preview)):
@@ -391,7 +391,7 @@ def package_docx(pkg: dict, letterhead: bytes | None = None, letterhead_filename
     subject.paragraph_format.space_after = Pt(5)
     subject.add_run("Subject: ").bold = True
     _word_runs(subject, pkg.get("subject", ""))
-    salutation = doc.add_paragraph("Dear Visa Officer,")
+    salutation = doc.add_paragraph(_plain(pkg.get("salutation") or "Dear Visa Officer,"))
     salutation.paragraph_format.space_after = Pt(5 if not one_page else 3)
     edited_preview = str(pkg.get("_edited_preview_text", "")).strip()
     if edited_preview:
